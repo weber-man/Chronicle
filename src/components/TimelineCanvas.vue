@@ -33,10 +33,20 @@
             </div>
 
             <div class="relative h-12 rounded-full bg-white/[0.04]">
-              <div class="absolute inset-y-3 rounded-full bg-gradient-to-r from-sky-400 via-cyan-300 to-violet-400 shadow-lg shadow-sky-500/20" :style="barStyle(event)"></div>
-              <div class="absolute inset-y-2 flex items-center" :style="dotStyle(event)">
-                <div class="h-4 w-4 rounded-full border-2 border-slate-950 bg-white shadow-lg shadow-sky-400/50"></div>
-              </div>
+              <template v-if="isInstantEvent(event)">
+                <div class="absolute inset-y-1 w-px bg-gradient-to-b from-transparent via-sky-300/80 to-transparent" :style="instantLineStyle(event)"></div>
+                <div class="absolute inset-y-0 flex items-center" :style="instantDotStyle(event)">
+                  <div class="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/80 shadow-lg shadow-sky-500/25 ring-1 ring-sky-300/30">
+                    <div class="h-3 w-3 rounded-full bg-gradient-to-br from-sky-300 to-violet-400 shadow shadow-sky-400/60"></div>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <div class="absolute inset-y-3 rounded-full bg-gradient-to-r from-sky-400 via-cyan-300 to-violet-400 shadow-lg shadow-sky-500/20" :style="barStyle(event)"></div>
+                <div class="absolute inset-y-2 flex items-center" :style="dotStyle(event)">
+                  <div class="h-4 w-4 rounded-full border-2 border-slate-950 bg-white shadow-lg shadow-sky-400/50"></div>
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -72,6 +82,10 @@ function pos(dateValue: number) {
   return ((dateValue - bounds.value.min) / span.value) * 100;
 }
 
+function isInstantEvent(event: LifeEvent) {
+  return !event.endDate && !event.isOngoing;
+}
+
 function barStyle(event: LifeEvent) {
   const left = pos(numericValue(event.startDate, 'start'));
   const endValue = numericValue(event.endDate ?? event.startDate, 'end');
@@ -81,6 +95,14 @@ function barStyle(event: LifeEvent) {
 
 function dotStyle(event: LifeEvent) {
   return { left: `calc(${pos(numericValue(event.startDate, 'start'))}% - 0.5rem)` };
+}
+
+function instantLineStyle(event: LifeEvent) {
+  return { left: `${pos(numericValue(event.startDate, 'start'))}%` };
+}
+
+function instantDotStyle(event: LifeEvent) {
+  return { left: `calc(${pos(numericValue(event.startDate, 'start'))}% - 0.75rem)` };
 }
 
 function userName(userId: number) {

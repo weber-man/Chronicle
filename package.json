@@ -26,6 +26,7 @@
     "zod": "^3.25.51"
   },
   "devDependencies": {
+    "@sparticuz/chromium": "^149.0.0",
     "@tailwindcss/postcss": "^4.1.8",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
@@ -34,7 +35,9 @@
     "@vitejs/plugin-vue": "^5.2.4",
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.1.2",
+    "playwright": "^1.60.0",
     "postcss": "^8.5.4",
+    "puppeteer-core": "^25.1.0",
     "tailwindcss": "^4.1.8",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
