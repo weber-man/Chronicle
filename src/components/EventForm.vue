@@ -1,64 +1,64 @@
 <template>
-  <section class="rounded-[2rem] border border-white/10 bg-white/5 p-5 shadow-xl shadow-slate-950/30 backdrop-blur-xl">
+  <section class="paper-panel rounded-[2rem] p-5">
     <div class="mb-5 flex items-center justify-between gap-4">
       <div>
-        <p class="text-sm font-medium text-slate-300">Erfassen</p>
-        <h2 class="text-xl font-semibold text-white">Neues Ereignis oder Zeitspanne</h2>
+        <p class="text-sm font-medium text-stone-500">Erfassen</p>
+        <h2 class="paper-heading text-xl font-semibold text-stone-900">Neues Ereignis oder Zeitspanne</h2>
       </div>
-      <button v-if="editingEvent" class="text-sm text-slate-300 underline decoration-dotted underline-offset-4" @click="reset">Bearbeitung abbrechen</button>
+      <button v-if="editingEvent" class="text-sm text-stone-500 underline decoration-dotted underline-offset-4" @click="reset">Bearbeitung abbrechen</button>
     </div>
 
     <form class="grid gap-4" @submit.prevent="submit">
       <div class="grid gap-4 lg:grid-cols-2">
-        <label class="grid gap-2">
-          <span class="text-sm text-slate-300">Titel</span>
-          <input v-model="form.title" class="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white placeholder:text-slate-500" placeholder="Urlaub Norwegen" />
+        <label class="grid min-w-0 gap-2">
+          <span class="text-sm text-stone-600">Titel</span>
+          <input v-model="form.title" class="paper-input w-full rounded-2xl px-4 py-3" placeholder="Urlaub Norwegen" />
         </label>
-        <label class="grid gap-2">
-          <span class="text-sm text-slate-300">Kategorie</span>
-          <input v-model="form.category" class="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white placeholder:text-slate-500" placeholder="Reisen, Familie, Beruf ..." />
+        <label class="grid min-w-0 gap-2">
+          <span class="text-sm text-stone-600">Kategorie</span>
+          <input v-model="form.category" class="paper-input w-full rounded-2xl px-4 py-3" placeholder="Reisen, Familie, Beruf ..." />
         </label>
       </div>
 
-      <label class="grid gap-2">
-        <span class="text-sm text-slate-300">Beschreibung</span>
-        <textarea v-model="form.description" rows="3" class="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white placeholder:text-slate-500" placeholder="Was war daran wichtig?"></textarea>
+      <label class="grid min-w-0 gap-2">
+        <span class="text-sm text-stone-600">Beschreibung</span>
+        <textarea v-model="form.description" rows="3" class="paper-input w-full rounded-2xl px-4 py-3" placeholder="Was war daran wichtig?"></textarea>
       </label>
 
-      <div class="grid gap-4 rounded-3xl border border-white/10 bg-slate-950/40 p-4 lg:grid-cols-2">
+      <div class="paper-subtle grid gap-4 rounded-3xl p-4 lg:grid-cols-2">
         <DateField v-model="form.startDate" label="Beginn" />
-        <div class="grid gap-3">
+        <div class="grid min-w-0 gap-3">
           <div class="flex items-center justify-between">
-            <p class="text-sm text-slate-300">Ende</p>
-            <label class="flex items-center gap-2 text-sm text-slate-300">
+            <p class="text-sm text-stone-600">Ende</p>
+            <label class="flex items-center gap-2 text-sm text-stone-600">
               <input v-model="hasEndDate" type="checkbox" class="rounded border-white/10 bg-white/10" />
               Zeitspanne
             </label>
           </div>
           <DateField v-if="hasEndDate" v-model="form.endDate" label="Ende" />
-          <div v-else class="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-6 text-sm text-slate-400">
+          <div v-else class="rounded-2xl border border-dashed border-amber-900/20 bg-amber-50/45 px-4 py-6 text-sm text-stone-500">
             Einzelner Zeitpunkt — perfekt für Geburten, Umzüge oder Abschlüsse.
           </div>
-          <label v-if="hasEndDate" class="flex items-center gap-2 text-sm text-slate-300">
+          <label v-if="hasEndDate" class="flex items-center gap-2 text-sm text-stone-600">
             <input v-model="form.isOngoing" type="checkbox" class="rounded border-white/10 bg-white/10" />
             Läuft noch
           </label>
         </div>
       </div>
 
-      <label class="grid gap-2 lg:max-w-xs">
-        <span class="text-sm text-slate-300">Nutzer</span>
-        <select v-model.number="form.userId" class="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-white">
+      <label class="grid min-w-0 gap-2 lg:max-w-xs">
+        <span class="text-sm text-stone-600">Nutzer</span>
+        <select v-model.number="form.userId" class="paper-input w-full rounded-2xl px-4 py-3">
           <option disabled value="0">Bitte wählen</option>
           <option v-for="user in store.users" :key="user.id" :value="user.id">{{ user.name }}</option>
         </select>
       </label>
 
       <div class="flex flex-wrap gap-3 pt-2">
-        <button class="rounded-2xl bg-white px-5 py-3 font-medium text-slate-950 transition hover:scale-[1.01]" type="submit">
+        <button class="ink-button rounded-2xl px-5 py-3 font-medium transition hover:scale-[1.01]" type="submit">
           {{ editingEvent ? 'Ereignis aktualisieren' : 'Ereignis speichern' }}
         </button>
-        <button class="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-medium text-white transition hover:bg-white/10" type="button" @click="fillExample">
+        <button class="paper-button rounded-2xl px-5 py-3 font-medium transition hover:bg-white/95" type="button" @click="fillExample">
           Beispiel einsetzen
         </button>
       </div>

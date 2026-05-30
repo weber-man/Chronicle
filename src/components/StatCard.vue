@@ -1,10 +1,10 @@
 <template>
-  <div class="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-lg shadow-slate-950/30 backdrop-blur-xl">
-    <p class="text-sm text-slate-400">{{ label }}</p>
+  <div class="paper-panel rounded-3xl p-5">
+    <p class="text-sm text-stone-500">{{ label }}</p>
     <div class="mt-3 flex items-end justify-between gap-3">
       <div>
-        <p class="text-2xl font-semibold text-white">{{ value }}</p>
-        <p v-if="hint" class="mt-1 text-xs text-slate-400">{{ hint }}</p>
+        <p class="paper-heading text-2xl font-semibold text-stone-900">{{ value }}</p>
+        <p v-if="hint" class="mt-1 text-xs text-stone-500">{{ hint }}</p>
       </div>
       <slot />
     </div>

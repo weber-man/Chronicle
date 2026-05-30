@@ -1,21 +1,148 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: dark;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color-scheme: light;
+  font-family: "Avenir Next", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 html {
-  background: #020617;
+  background: #d7c5a3;
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  color: #34261a;
+  position: relative;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(131, 95, 55, 0.08) 0 1px, transparent 1.2px) 0 0 / 26px 26px,
+    radial-gradient(circle at 74% 62%, rgba(154, 117, 70, 0.06) 0 0.9px, transparent 1.1px) 0 0 / 22px 22px,
+    radial-gradient(circle at 38% 78%, rgba(99, 70, 40, 0.05) 0 0.7px, transparent 1px) 0 0 / 18px 18px,
+    linear-gradient(115deg, transparent 0 46%, rgba(128, 93, 52, 0.035) 47%, transparent 48% 100%) 0 0 / 34px 34px,
+    linear-gradient(180deg, rgba(255, 248, 228, 0.97), rgba(232, 214, 179, 0.84) 38%, rgba(210, 189, 151, 0.93) 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.2;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-size: 220px 220px;
+  mix-blend-mode: multiply;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.11;
+  background:
+    repeating-linear-gradient(8deg, rgba(104, 72, 40, 0.08) 0 1px, transparent 1px 13px),
+    repeating-linear-gradient(97deg, rgba(255, 255, 255, 0.14) 0 1px, transparent 1px 19px);
+  mix-blend-mode: soft-light;
 }
 
 * {
   box-sizing: border-box;
+}
+
+#app {
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: rgba(134, 79, 33, 0.18);
+}
+
+.paper-panel {
+  background:
+    radial-gradient(circle at 14% 20%, rgba(155, 120, 73, 0.06) 0 0.8px, transparent 1px) 0 0 / 24px 24px,
+    radial-gradient(circle at 72% 66%, rgba(130, 95, 56, 0.045) 0 0.7px, transparent 1px) 0 0 / 20px 20px,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, rgba(251, 244, 226, 0.98), rgba(241, 229, 201, 0.98));
+  background-size: 24px 24px, 20px 20px, 160px 160px, auto;
+  border: 1px solid rgba(136, 102, 56, 0.28);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 18px 40px rgba(103, 74, 35, 0.15),
+    0 3px 8px rgba(103, 74, 35, 0.1);
+}
+
+.paper-subtle {
+  background: rgba(255, 250, 237, 0.7);
+  border: 1px solid rgba(136, 102, 56, 0.18);
+}
+
+.paper-input {
+  background: rgba(255, 251, 242, 0.85);
+  border: 1px solid rgba(136, 102, 56, 0.25);
+  color: #2f2418;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+}
+
+.paper-input::placeholder {
+  color: #8f7a5f;
+}
+
+.paper-input:focus {
+  outline: none;
+  border-color: rgba(122, 77, 34, 0.6);
+  box-shadow: 0 0 0 3px rgba(150, 103, 55, 0.12);
+}
+
+.paper-chip {
+  background: rgba(255, 249, 236, 0.82);
+  border: 1px solid rgba(136, 102, 56, 0.22);
+  color: #5a4430;
+}
+
+.ink-button {
+  background: linear-gradient(180deg, #5f452f, #4c3624);
+  color: #fbf4e2;
+  border: 1px solid rgba(61, 42, 26, 0.85);
+  box-shadow: 0 2px 0 rgba(255, 255, 255, 0.12) inset, 0 10px 18px rgba(87, 61, 32, 0.18);
+}
+
+.ink-button:hover {
+  filter: brightness(1.04);
+}
+
+.paper-button {
+  background: rgba(255, 249, 236, 0.88);
+  color: #4a3524;
+  border: 1px solid rgba(136, 102, 56, 0.24);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.72) inset;
+}
+
+.paper-nav {
+  background: rgba(249, 241, 221, 0.82);
+  border: 1px solid rgba(136, 102, 56, 0.22);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+}
+
+.paper-nav-link {
+  color: #6a5038;
+}
+
+.paper-nav-link:hover {
+  color: #2f2418;
+}
+
+.paper-nav-link.router-link-active {
+  background: linear-gradient(180deg, rgba(255, 251, 241, 0.95), rgba(242, 228, 196, 0.95));
+  color: #2f2418;
+  border: 1px solid rgba(136, 102, 56, 0.2);
+  box-shadow: 0 8px 16px rgba(103, 74, 35, 0.14);
+}
+
+.paper-heading {
+  font-family: Georgia, "Times New Roman", ui-serif, serif;
+  letter-spacing: -0.01em;
 }
 
 button,
@@ -31,12 +158,12 @@ select {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.35);
+  background: rgba(116, 85, 50, 0.35);
   border-radius: 999px;
   border: 3px solid transparent;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.3);
+  background: rgba(146, 118, 83, 0.14);
 }
