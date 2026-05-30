@@ -1,0 +1,23 @@
+services:
+  lifeline-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: lifeline-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      JWT_SECRET: change-this-to-a-long-random-secret
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: change-this-admin-password
+      ADMIN_NAME: Administrator
+      ADMIN_COLOR: "#7c3aed"
+      ALLOW_REGISTRATION: "false"
+    volumes:
+      - lifeline_data:/app/data
+
+volumes:
+  lifeline_data:

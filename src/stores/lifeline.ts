@@ -45,6 +45,14 @@ export const useLifelineStore = defineStore('lifeline', () => {
     await Promise.all([loadEvents(), loadAdminUsers()]);
   }
 
+  async function requestPasswordReset(payload: { email: string }) {
+    return api.requestPasswordReset(payload);
+  }
+
+  async function confirmPasswordReset(payload: { token: string; password: string }) {
+    return api.confirmPasswordReset(payload);
+  }
+
   async function logout() {
     await api.logout();
     setCsrfToken('');
@@ -122,6 +130,8 @@ export const useLifelineStore = defineStore('lifeline', () => {
     bootstrap,
     login,
     register,
+    requestPasswordReset,
+    confirmPasswordReset,
     logout,
     loadEvents,
     loadAdminUsers,

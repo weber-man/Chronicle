@@ -272,3 +272,48 @@ test('account deletion requires password and removes session access', async () =
     fixture.cleanup();
   }
 });
+
+test('password reset flow issues a token and accepts the new password', async () => {
+  const fixture = makeFixture();
+  try {
+    const agent = request.agent(fixture.app);
+    await register(agent, { email: 'reset-me@example.com', name: 'Reset Me' });
+
+    const requestReset = await request(fixture.app)
+      .post('/api/auth/password-reset/request')
+      .send({ email: 'reset-me@example.com' });
+    assert.equal(requestReset.status, 200);
+    assert.equal(typeof requestReset.body.resetToken, 'string');
+
+    const confirm = await request(fixture.app)
+      .post('/api/auth/password-reset/confirm')
+      .send({ token: requestReset.body.resetToken, password: 'BrandNewSecure123!' });
+    assert.equal(confirm.status, 200);
+
+    const relogin = await request(fixture.app)
+      .post('/api/auth/login')
+      .send({ email: 'reset-me@example.com', password: 'BrandNewSecure123!' });
+    assert.equal(relogin.status, 200);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('login rate limiting blocks repeated bad attempts', async () => {
+  const fixture = makeFixture();
+  try {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const response = await request(fixture.app)
+        .post('/api/auth/login')
+        .send({ email: 'admin@example.com', password: 'definitely-wrong-password' });
+      assert.equal(response.status, 401);
+    }
+
+    const blocked = await request(fixture.app)
+      .post('/api/auth/login')
+      .send({ email: 'admin@example.com', password: 'definitely-wrong-password' });
+    assert.equal(blocked.status, 429);
+  } finally {
+    fixture.cleanup();
+  }
+});

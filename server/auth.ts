@@ -53,6 +53,14 @@ export function createCsrfToken() {
   return crypto.randomBytes(24).toString('hex');
 }
 
+export function createResetToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+export function hashResetToken(token: string) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
 export function tokenTtlSeconds() {
   return TOKEN_TTL_SECONDS;
 }

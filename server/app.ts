@@ -4,7 +4,7 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
-import { createCsrfToken, hashPassword, signAccessToken, tokenTtlSeconds, verifyAccessToken, verifyPassword } from './auth.js';
+import { createCsrfToken, createResetToken, hashPassword, hashResetToken, signAccessToken, tokenTtlSeconds, verifyAccessToken, verifyPassword } from './auth.js';
 
 export interface AppOptions {
   dbPath?: string;
@@ -96,6 +96,15 @@ const adminUpdateUserSchema = z.object({
   password: z.string().min(12).max(200).optional(),
 });
 
+const passwordResetRequestSchema = z.object({
+  email: z.string().trim().email(),
+});
+
+const passwordResetConfirmSchema = z.object({
+  token: z.string().trim().min(32).max(256),
+  password: z.string().min(12).max(200),
+});
+
 declare global {
   namespace Express {
     interface Request {
@@ -106,6 +115,10 @@ declare global {
 
 const AUTH_COOKIE = 'lifeline_auth';
 const CSRF_COOKIE = 'lifeline_csrf';
+const PASSWORD_RESET_TTL_MINUTES = 30;
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_ATTEMPT_LIMIT = 8;
+const RESET_ATTEMPT_LIMIT = 5;
 
 export function createApp(options: AppOptions = {}) {
   const app = express();
@@ -119,6 +132,8 @@ export function createApp(options: AppOptions = {}) {
   const jwtSecret = options.jwtSecret ?? process.env.JWT_SECRET ?? 'dev-only-lifeline-secret-change-me';
   const secureCookies = options.secureCookies ?? process.env.NODE_ENV === 'production';
   const allowRegistration = options.allowRegistration ?? process.env.ALLOW_REGISTRATION !== 'false';
+  const exposeResetToken = process.env.NODE_ENV !== 'production' || process.env.PASSWORD_RESET_DEBUG === 'true';
+  const authLimiter = createRateLimiter();
 
   ensureSchema(db);
   bootstrapAdmin(db, {
@@ -130,6 +145,7 @@ export function createApp(options: AppOptions = {}) {
 
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json());
+  app.use(securityHeaders);
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });
@@ -148,7 +164,7 @@ export function createApp(options: AppOptions = {}) {
     next();
   });
 
-  app.post('/api/auth/register', (req, res) => {
+  app.post('/api/auth/register', authLimiter('register', LOGIN_ATTEMPT_LIMIT), (req, res) => {
     if (!allowRegistration) return res.status(403).json({ message: 'Registrierung ist deaktiviert.' });
     const payload = registerSchema.parse(req.body);
     ensureUniqueEmail(db, payload.email);
@@ -159,7 +175,7 @@ export function createApp(options: AppOptions = {}) {
     res.status(201).json({ user: created, csrfToken: readSetCookieValue(res, CSRF_COOKIE) });
   });
 
-  app.post('/api/auth/login', (req, res) => {
+  app.post('/api/auth/login', authLimiter('login', LOGIN_ATTEMPT_LIMIT), (req, res) => {
     const payload = loginSchema.parse(req.body);
     const row = getUserRowByEmail(db, payload.email);
     if (!row?.passwordHash || !verifyPassword(payload.password, row.passwordHash)) {
@@ -174,6 +190,54 @@ export function createApp(options: AppOptions = {}) {
   app.post('/api/auth/logout', (_req, res) => {
     clearAuthCookies(res, secureCookies);
     res.json({ ok: true });
+  });
+
+  app.post('/api/auth/password-reset/request', authLimiter('password-reset-request', RESET_ATTEMPT_LIMIT), (req, res) => {
+    const payload = passwordResetRequestSchema.parse(req.body);
+    const row = getUserRowByEmail(db, payload.email);
+
+    if (row?.passwordHash) {
+      deletePasswordResetTokensForUser(db, row.id);
+      const rawToken = createResetToken();
+      const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000).toISOString();
+      db.prepare(`
+        INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+        VALUES (?, ?, ?)
+      `).run(row.id, hashResetToken(rawToken), expiresAt);
+
+      return res.json({
+        ok: true,
+        message: 'Falls ein passender Account existiert, wurde ein Reset gestartet.',
+        ...(exposeResetToken ? { resetToken: rawToken, expiresAt } : {}),
+      });
+    }
+
+    return res.json({ ok: true, message: 'Falls ein passender Account existiert, wurde ein Reset gestartet.' });
+  });
+
+  app.post('/api/auth/password-reset/confirm', authLimiter('password-reset-confirm', RESET_ATTEMPT_LIMIT), (req, res) => {
+    const payload = passwordResetConfirmSchema.parse(req.body);
+    const tokenRow = db.prepare(`
+      SELECT id, user_id as userId, expires_at as expiresAt, used_at as usedAt
+      FROM password_reset_tokens
+      WHERE token_hash = ?
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get(hashResetToken(payload.token)) as { id: number; userId: number; expiresAt: string; usedAt: string | null } | undefined;
+
+    if (!tokenRow || tokenRow.usedAt || new Date(tokenRow.expiresAt).getTime() < Date.now()) {
+      return res.status(400).json({ message: 'Reset-Token ist ungültig oder abgelaufen.' });
+    }
+
+    db.prepare(`
+      UPDATE users
+      SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(hashPassword(payload.password), tokenRow.userId);
+    db.prepare(`UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ?`).run(tokenRow.id);
+    deletePasswordResetTokensForUser(db, tokenRow.userId, tokenRow.id);
+    clearAuthCookies(res, secureCookies);
+    return res.json({ ok: true, message: 'Passwort wurde zurückgesetzt. Bitte neu anmelden.' });
   });
 
   app.get('/api/auth/me', requireAuth, (req, res) => {
@@ -365,6 +429,15 @@ function ensureSchema(db: Database.Database) {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   addColumnIfMissing(db, 'users', 'email', 'TEXT');
@@ -373,6 +446,8 @@ function ensureSchema(db: Database.Database) {
   addColumnIfMissing(db, 'users', 'updated_at', 'TEXT');
   db.prepare("UPDATE users SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)").run();
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email IS NOT NULL");
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_password_reset_token_hash ON password_reset_tokens(token_hash)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_password_reset_user_id ON password_reset_tokens(user_id)');
 }
 
 function addColumnIfMissing(db: Database.Database, table: string, column: string, definition: string) {
@@ -540,6 +615,14 @@ function listUsers(db: Database.Database) {
   return db.prepare(`SELECT id, name, color, email, role, created_at as createdAt FROM users ORDER BY created_at ASC, id ASC`).all().map((row) => sanitizeUser(row as SanitizedUser));
 }
 
+function deletePasswordResetTokensForUser(db: Database.Database, userId: number, keepTokenId?: number) {
+  if (keepTokenId) {
+    db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ? AND id != ?').run(userId, keepTokenId);
+    return;
+  }
+  db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?').run(userId);
+}
+
 function activeUserCount(db: Database.Database) {
   return Number((db.prepare('SELECT COUNT(*) as count FROM users WHERE email IS NOT NULL').get() as { count: number }).count);
 }
@@ -575,6 +658,38 @@ function attachAuthCookies(res: express.Response, user: SanitizedUser, jwtSecret
     serializeCookie(AUTH_COOKIE, token, { httpOnly: true, maxAge: ttl, sameSite: 'Lax', secure: secureCookies }),
     serializeCookie(CSRF_COOKIE, csrfToken, { httpOnly: false, maxAge: ttl, sameSite: 'Lax', secure: secureCookies }),
   ]);
+}
+
+function securityHeaders(_req: express.Request, res: express.Response, next: express.NextFunction) {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+}
+
+function createRateLimiter() {
+  const attempts = new Map<string, { count: number; resetAt: number }>();
+
+  return (scope: string, limit: number) => (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const key = [scope, req.ip, email].filter(Boolean).join(':');
+    const now = Date.now();
+    const current = attempts.get(key);
+
+    if (!current || current.resetAt <= now) {
+      attempts.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+      return next();
+    }
+
+    if (current.count >= limit) {
+      return next(new AuthError(429, 'Zu viele Versuche. Bitte später erneut probieren.'));
+    }
+
+    current.count += 1;
+    attempts.set(key, current);
+    return next();
+  };
 }
 
 function clearAuthCookies(res: express.Response, secureCookies: boolean) {
