@@ -7,9 +7,6 @@
             Lifeline
           </p>
           <h1 class="paper-heading text-3xl font-semibold tracking-tight text-stone-900">Momente & Zeitspannen mit Kontext festhalten</h1>
-          <p class="mt-2 max-w-2xl text-sm text-stone-600 sm:text-base">
-            Ein ruhiges Archiv mit Papier-Charakter — für einzelne Tage, lange Kapitel und alles dazwischen.
-          </p>
         </div>
 
         <nav class="paper-nav flex items-center gap-2 rounded-2xl p-1.5">

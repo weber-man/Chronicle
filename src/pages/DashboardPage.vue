@@ -7,13 +7,11 @@
     </div>
 
     <div class="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-      <div class="space-y-6">
-        <UserPanel />
-        <EventList :events="store.events" :users="store.users" @edit="editingEvent = $event" @remove="removeEvent($event)" />
-      </div>
-
+      <UserPanel />
       <EventForm :editing-event="editingEvent" @saved="editingEvent = null" @cancel="editingEvent = null" />
     </div>
+
+    <EventList :events="store.events" :users="store.users" @edit="editingEvent = $event" @remove="removeEvent($event)" />
   </div>
 </template>
 

@@ -2,7 +2,6 @@
   <section class="paper-panel rounded-[2rem] p-5">
     <div class="flex items-center justify-between gap-4">
       <div>
-        <p class="text-sm font-medium text-stone-500">Nutzer</p>
         <h2 class="paper-heading text-xl font-semibold text-stone-900">Wer schaut gerade auf die Timeline?</h2>
       </div>
       <button class="paper-button rounded-2xl px-4 py-2 text-sm font-medium transition" @click="isCreating = !isCreating">
