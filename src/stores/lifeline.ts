@@ -1,26 +1,64 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { api } from '../lib/api';
+import { api, setCsrfToken } from '../lib/api';
 import type { LifeEvent, Summary, User } from '../lib/types';
 
 export const useLifelineStore = defineStore('lifeline', () => {
-  const users = ref<User[]>([]);
+  const me = ref<User | null>(null);
+  const adminUsers = ref<User[]>([]);
   const events = ref<LifeEvent[]>([]);
-  const selectedUserId = ref<number | null>(null);
   const summary = ref<Summary>({ totalUsers: 0, totalEvents: 0, rangeLabel: 'Noch leer', ongoingEvents: 0 });
   const isLoading = ref(false);
+  const authReady = ref(false);
 
-  const selectedUser = computed(() => users.value.find((user) => user.id === selectedUserId.value) ?? null);
+  const isAuthenticated = computed(() => Boolean(me.value));
+  const isAdmin = computed(() => me.value?.role === 'admin');
+  const users = computed(() => (me.value ? [me.value] : []));
+  const selectedUserId = computed(() => me.value?.id ?? null);
 
-  async function loadUsers() {
-    users.value = await api.getUsers();
-    if (!selectedUserId.value && users.value[0]) selectedUserId.value = users.value[0].id;
+  async function bootstrap() {
+    try {
+      const data = await api.me();
+      me.value = data.user;
+      await Promise.all([loadEvents(), loadAdminUsers()]);
+    } catch {
+      me.value = null;
+      events.value = [];
+      adminUsers.value = [];
+      summary.value = { totalUsers: 0, totalEvents: 0, rangeLabel: 'Noch leer', ongoingEvents: 0 };
+    } finally {
+      authReady.value = true;
+    }
+  }
+
+  async function login(payload: { email: string; password: string }) {
+    const data = await api.login(payload);
+    setCsrfToken(data.csrfToken);
+    me.value = data.user;
+    await Promise.all([loadEvents(), loadAdminUsers()]);
+  }
+
+  async function register(payload: { name: string; color: string; email: string; password: string }) {
+    const data = await api.register(payload);
+    setCsrfToken(data.csrfToken);
+    me.value = data.user;
+    await Promise.all([loadEvents(), loadAdminUsers()]);
+  }
+
+  async function logout() {
+    await api.logout();
+    setCsrfToken('');
+    me.value = null;
+    events.value = [];
+    adminUsers.value = [];
+    summary.value = { totalUsers: 0, totalEvents: 0, rangeLabel: 'Noch leer', ongoingEvents: 0 };
   }
 
   async function loadEvents() {
+    if (!me.value) return;
     isLoading.value = true;
     try {
-      const data = await api.getEvents(selectedUserId.value);
+      const data = await api.getEvents();
       events.value = data.events;
       summary.value = data.summary;
     } finally {
@@ -28,20 +66,13 @@ export const useLifelineStore = defineStore('lifeline', () => {
     }
   }
 
-  async function bootstrap() {
-    await loadUsers();
-    await loadEvents();
-  }
-
-  async function selectUser(userId: number | null) {
-    selectedUserId.value = userId;
-    await loadEvents();
-  }
-
-  async function addUser(payload: { name: string; color: string }) {
-    users.value = await api.createUser(payload);
-    selectedUserId.value = users.value.at(-1)?.id ?? selectedUserId.value;
-    await loadEvents();
+  async function loadAdminUsers() {
+    if (!isAdmin.value) {
+      adminUsers.value = [];
+      return;
+    }
+    const data = await api.getAdminUsers();
+    adminUsers.value = data.users;
   }
 
   async function saveEvent(payload: Record<string, unknown>, id?: number) {
@@ -55,17 +86,50 @@ export const useLifelineStore = defineStore('lifeline', () => {
     await loadEvents();
   }
 
+  async function updateAccount(payload: Record<string, unknown>) {
+    const data = await api.updateAccount(payload);
+    me.value = data.user;
+    await loadAdminUsers();
+  }
+
+  async function deleteAccount(password: string) {
+    await api.deleteAccount(password);
+    await logout();
+  }
+
+  async function createUser(payload: { name: string; color: string; email: string; password: string; role: 'admin' | 'user' }) {
+    await api.createAdminUser(payload);
+    await loadAdminUsers();
+  }
+
+  async function updateUser(id: number, payload: Record<string, unknown>) {
+    const data = await api.updateAdminUser(id, payload);
+    adminUsers.value = adminUsers.value.map((user) => (user.id === id ? data.user : user));
+    if (me.value?.id === id) me.value = data.user;
+  }
+
   return {
+    me,
     users,
+    adminUsers,
     events,
     summary,
-    selectedUserId,
-    selectedUser,
     isLoading,
+    authReady,
+    isAuthenticated,
+    isAdmin,
+    selectedUserId,
     bootstrap,
-    selectUser,
-    addUser,
+    login,
+    register,
+    logout,
+    loadEvents,
+    loadAdminUsers,
     saveEvent,
     removeEvent,
+    updateAccount,
+    deleteAccount,
+    createUser,
+    updateUser,
   };
 });

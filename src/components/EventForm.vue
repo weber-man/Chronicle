@@ -46,14 +46,6 @@
         </div>
       </div>
 
-      <label class="grid min-w-0 gap-2 lg:max-w-xs">
-        <span class="text-sm text-stone-600">Nutzer</span>
-        <select v-model.number="form.userId" class="paper-input w-full rounded-2xl px-4 py-3">
-          <option disabled value="0">Bitte wählen</option>
-          <option v-for="user in store.users" :key="user.id" :value="user.id">{{ user.name }}</option>
-        </select>
-      </label>
-
       <div class="flex flex-wrap gap-3 pt-2">
         <button class="ink-button rounded-2xl px-5 py-3 font-medium transition hover:scale-[1.01]" type="submit">
           {{ editingEvent ? 'Ereignis aktualisieren' : 'Ereignis speichern' }}
@@ -79,7 +71,6 @@ const store = useLifelineStore();
 const blankDate = (): TimelineDate => ({ precision: 'day', year: new Date().getFullYear(), month: 1, day: 1 });
 const hasEndDate = ref(false);
 const form = reactive({
-  userId: 0,
   title: '',
   description: '',
   category: '',
@@ -90,7 +81,6 @@ const form = reactive({
 
 function loadFromEvent(event?: LifeEvent | null) {
   if (!event) {
-    form.userId = store.selectedUserId ?? store.users[0]?.id ?? 0;
     form.title = '';
     form.description = '';
     form.category = '';
@@ -101,7 +91,6 @@ function loadFromEvent(event?: LifeEvent | null) {
     return;
   }
 
-  form.userId = event.userId;
   form.title = event.title;
   form.description = event.description;
   form.category = event.category;
@@ -112,15 +101,11 @@ function loadFromEvent(event?: LifeEvent | null) {
 }
 
 watch(() => props.editingEvent, loadFromEvent, { immediate: true });
-watch(() => store.selectedUserId, (value) => {
-  if (!props.editingEvent && value) form.userId = value;
-});
 
 async function submit() {
-  if (!form.userId || !form.title.trim()) return;
+  if (!form.title.trim()) return;
 
   const payload = {
-    userId: form.userId,
     title: form.title.trim(),
     description: form.description.trim(),
     category: form.category.trim() || 'Alltag',
@@ -142,7 +127,6 @@ function fillExample() {
   form.endDate = { precision: 'month', year: 2025, month: 6 };
   form.isOngoing = false;
   hasEndDate.value = true;
-  form.userId = form.userId || store.selectedUserId || store.users[0]?.id || 0;
 }
 
 function reset() {

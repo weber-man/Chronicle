@@ -1,4 +1,5 @@
 export type Precision = 'year' | 'month' | 'day';
+export type UserRole = 'admin' | 'user';
 
 export interface TimelineDate {
   precision: Precision;
@@ -11,6 +12,8 @@ export interface User {
   id: number;
   name: string;
   color: string;
+  email: string;
+  role: UserRole;
   createdAt: string;
 }
 
