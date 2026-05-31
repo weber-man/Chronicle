@@ -17,6 +17,10 @@ export interface User {
   createdAt: string;
 }
 
+export interface AuthConfig {
+  allowRegistration: boolean;
+}
+
 export interface LifeEvent {
   id: number;
   userId: number;

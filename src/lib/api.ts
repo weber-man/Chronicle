@@ -1,4 +1,4 @@
-import type { LifeEvent, Summary, User } from './types';
+import type { AuthConfig, LifeEvent, Summary, User } from './types';
 
 let csrfToken = '';
 
@@ -32,6 +32,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  authConfig: () => request<AuthConfig>('/auth/config'),
   me: () => request<{ user: User }>('/auth/me'),
   login: (payload: { email: string; password: string }) => request<{ user: User; csrfToken: string }>('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   register: (payload: { name: string; color: string; email: string; password: string }) => request<{ user: User; csrfToken: string }>('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),

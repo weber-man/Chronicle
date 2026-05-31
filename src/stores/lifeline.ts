@@ -10,6 +10,7 @@ export const useLifelineStore = defineStore('lifeline', () => {
   const summary = ref<Summary>({ totalUsers: 0, totalEvents: 0, rangeLabel: 'Noch leer', ongoingEvents: 0 });
   const isLoading = ref(false);
   const authReady = ref(false);
+  const allowRegistration = ref(true);
 
   const isAuthenticated = computed(() => Boolean(me.value));
   const isAdmin = computed(() => me.value?.role === 'admin');
@@ -18,6 +19,13 @@ export const useLifelineStore = defineStore('lifeline', () => {
 
   async function bootstrap() {
     try {
+      try {
+        const config = await api.authConfig();
+        allowRegistration.value = config.allowRegistration;
+      } catch {
+        allowRegistration.value = true;
+      }
+
       const data = await api.me();
       me.value = data.user;
       await Promise.all([loadEvents(), loadAdminUsers()]);
@@ -124,6 +132,7 @@ export const useLifelineStore = defineStore('lifeline', () => {
     summary,
     isLoading,
     authReady,
+    allowRegistration,
     isAuthenticated,
     isAdmin,
     selectedUserId,

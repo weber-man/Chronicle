@@ -8,7 +8,7 @@
 
     <div class="mb-4 flex rounded-2xl paper-nav p-1">
       <button class="flex-1 rounded-xl px-4 py-2 text-sm font-medium" :class="mode === 'login' ? activeClass : baseClass" @click="switchMode('login')">Login</button>
-      <button class="flex-1 rounded-xl px-4 py-2 text-sm font-medium" :class="mode === 'register' ? activeClass : baseClass" @click="switchMode('register')">Account erstellen</button>
+      <button v-if="store.allowRegistration" class="flex-1 rounded-xl px-4 py-2 text-sm font-medium" :class="mode === 'register' ? activeClass : baseClass" @click="switchMode('register')">Account erstellen</button>
       <button class="flex-1 rounded-xl px-4 py-2 text-sm font-medium" :class="mode.startsWith('reset') ? activeClass : baseClass" @click="switchMode('reset-request')">Passwort reset</button>
     </div>
 
@@ -132,6 +132,10 @@ function clearFeedback() {
 }
 
 function switchMode(nextMode: Mode) {
+  if (nextMode === 'register' && !store.allowRegistration) {
+    mode.value = 'login';
+    return;
+  }
   mode.value = nextMode;
   clearFeedback();
 }

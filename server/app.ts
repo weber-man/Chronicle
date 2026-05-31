@@ -160,6 +160,10 @@ export function createApp(options: AppOptions = {}) {
     res.json({ ok: true });
   });
 
+  app.get('/api/auth/config', (_req, res) => {
+    res.json({ allowRegistration });
+  });
+
   app.use((req, _res, next) => {
     const token = readCookie(req.headers.cookie, AUTH_COOKIE);
     if (!token) return next();

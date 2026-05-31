@@ -52,6 +52,25 @@ test('authentication is required for event APIs', async () => {
   }
 });
 
+test('public auth config exposes whether registration is allowed', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lifeline-config-'));
+  const fixture = createApp({
+    dbPath: path.join(dir, 'lifeline.sqlite'),
+    jwtSecret: 'test-secret',
+    allowRegistration: false,
+    secureCookies: false,
+  });
+
+  try {
+    const response = await request(fixture.app).get('/api/auth/config');
+    assert.equal(response.status, 200);
+    assert.equal(response.body.allowRegistration, false);
+  } finally {
+    fixture.db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('registered users can only see and manage their own events', async () => {
   const fixture = makeFixture();
   try {
