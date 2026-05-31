@@ -6,13 +6,24 @@ export function setCsrfToken(value: string) {
   csrfToken = value;
 }
 
+function readCookie(name: string) {
+  if (typeof document === 'undefined') return '';
+  const cookies = document.cookie.split(';').map((entry) => entry.trim());
+  const match = cookies.find((entry) => entry.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : '';
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers ?? {});
   if (!(init?.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  if (csrfToken && init?.method && !['GET', 'HEAD'].includes(init.method.toUpperCase())) {
-    headers.set('x-csrf-token', csrfToken);
+  if (init?.method && !['GET', 'HEAD'].includes(init.method.toUpperCase())) {
+    const token = csrfToken || readCookie('lifeline_csrf');
+    if (token) {
+      csrfToken = token;
+      headers.set('x-csrf-token', token);
+    }
   }
 
   const response = await fetch(`/api${path}`, {
