@@ -7,7 +7,6 @@
     </div>
 
     <div class="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-      <UserPanel />
       <EventForm :editing-event="editingEvent" @saved="editingEvent = null" @cancel="editingEvent = null" />
     </div>
 
@@ -20,7 +19,6 @@ import { onMounted, ref } from 'vue';
 import EventForm from '../components/EventForm.vue';
 import EventList from '../components/EventList.vue';
 import StatCard from '../components/StatCard.vue';
-import UserPanel from '../components/UserPanel.vue';
 import type { LifeEvent } from '../lib/types';
 import { useLifelineStore } from '../stores/lifeline';
 

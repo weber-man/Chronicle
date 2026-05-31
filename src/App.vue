@@ -37,6 +37,7 @@ import { useLifelineStore } from './stores/lifeline';
 const navItems = [
   { to: '/', label: 'Liste & Erfassen' },
   { to: '/timeline', label: 'Timeline' },
+  { to: '/account', label: 'Account' },
 ];
 
 const store = useLifelineStore();
@@ -44,7 +45,7 @@ const route = useRoute();
 const router = useRouter();
 
 const activeNavIndex = computed(() => {
-  const currentPath = route.path === '/timeline' ? '/timeline' : '/';
+  const currentPath = navItems.some((item) => item.to === route.path) ? route.path : '/';
   return Math.max(navItems.findIndex((item) => item.to === currentPath), 0);
 });
 

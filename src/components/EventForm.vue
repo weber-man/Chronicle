@@ -50,9 +50,6 @@
         <button class="ink-button rounded-2xl px-5 py-3 font-medium transition hover:scale-[1.01]" type="submit">
           {{ editingEvent ? 'Ereignis aktualisieren' : 'Ereignis speichern' }}
         </button>
-        <button class="paper-button rounded-2xl px-5 py-3 font-medium transition hover:bg-white/95" type="button" @click="fillExample">
-          Beispiel einsetzen
-        </button>
       </div>
     </form>
   </section>
@@ -117,16 +114,6 @@ async function submit() {
   await store.saveEvent(payload, props.editingEvent?.id);
   reset();
   emit('saved');
-}
-
-function fillExample() {
-  form.title = 'Urlaub in Norwegen';
-  form.category = 'Reisen';
-  form.description = 'Roadtrip durch Fjorde, Wandern und viel Ruhe.';
-  form.startDate = { precision: 'month', year: 2025, month: 6 };
-  form.endDate = { precision: 'month', year: 2025, month: 6 };
-  form.isOngoing = false;
-  hasEndDate.value = true;
 }
 
 function reset() {
