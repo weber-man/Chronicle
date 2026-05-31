@@ -7,7 +7,6 @@ RUN npm ci
 COPY tsconfig.server.json tsconfig.json ./
 COPY vite.config.ts index.html postcss.config.js ./
 COPY src ./src
-COPY public ./public
 COPY server ./server
 RUN npm run build
 RUN npm prune --omit=dev
