@@ -123,6 +123,8 @@ const RESET_ATTEMPT_LIMIT = 5;
 export function createApp(options: AppOptions = {}) {
   const app = express();
   const dbPath = options.dbPath ?? defaultDbPath();
+  const clientDistPath = path.join(process.cwd(), 'dist');
+  const clientIndexPath = path.join(clientDistPath, 'index.html');
   const dbDir = path.dirname(dbPath);
   fs.mkdirSync(dbDir, { recursive: true });
   const db = new Database(dbPath);
@@ -378,6 +380,13 @@ export function createApp(options: AppOptions = {}) {
 
     res.json({ user: getUserById(db, userId) });
   });
+
+  if (fs.existsSync(clientIndexPath)) {
+    app.use(express.static(clientDistPath, { index: false }));
+    app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
+      res.sendFile(clientIndexPath);
+    });
+  }
 
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     if (error instanceof z.ZodError) {

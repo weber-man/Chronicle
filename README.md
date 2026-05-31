@@ -28,6 +28,8 @@ npm run start
 
 Die SQLite-Datei liegt unter `data/lifeline.sqlite`.
 
+In Production liefert der Express-Server auch das gebaute Frontend aus. Ein Reverse Proxy kann also einfach auf den einen Node-Port zeigen.
+
 ## Sicherheit / Auth
 
 - HTTP-only JWT-Cookie für Sessions
@@ -49,7 +51,7 @@ Für lokales Testen zeigt der Passwort-Reset-Request den Token im Response an. I
 
 ## Docker / Deployment
 
-Nur das Backend ist containerisiert.
+Das Image baut Frontend und Backend zusammen. Der Container liefert die App und `/api` über denselben Port aus.
 
 ```bash
 docker build -f Dockerfile.backend -t lifeline-backend .
@@ -88,4 +90,14 @@ services:
 
 volumes:
   lifeline_data:
+```
+
+### Reverse Proxy
+
+- Proxy auf den Lifeline-Container-Port, z. B. `http://127.0.0.1:3001`.
+- Wenn dein Proxy eine Content-Security-Policy setzt, darf sie nicht `default-src 'none'` sein, sonst werden die Frontend-Assets blockiert.
+- Minimal brauchbar ist z. B.:
+
+```text
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self' data:;
 ```
