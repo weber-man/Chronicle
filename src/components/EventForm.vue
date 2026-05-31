@@ -14,10 +14,37 @@
           <span class="text-sm text-stone-600">Titel</span>
           <input v-model="form.title" class="paper-input w-full rounded-2xl px-4 py-3" placeholder="Urlaub Norwegen" />
         </label>
-        <label class="grid min-w-0 gap-2">
-          <span class="text-sm text-stone-600">Kategorie</span>
-          <input v-model="form.category" class="paper-input w-full rounded-2xl px-4 py-3" placeholder="Reisen, Familie, Beruf ..." />
-        </label>
+        <div class="grid min-w-0 gap-2">
+          <span class="text-sm text-stone-600">Kategorien</span>
+          <div class="paper-input min-h-[3.5rem] rounded-2xl px-3 py-3">
+            <div v-if="selectedCategories.length" class="mb-2 flex flex-wrap gap-2">
+              <span v-for="category in selectedCategories" :key="category" class="paper-chip inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs">
+                {{ category }}
+                <button type="button" class="text-stone-500 hover:text-stone-900" :aria-label="`Kategorie ${category} entfernen`" @click="removeCategory(category)">×</button>
+              </span>
+            </div>
+
+            <input
+              v-model="categoryInput"
+              list="category-suggestions"
+              class="w-full min-w-0 bg-transparent px-1 py-1 text-sm text-stone-900 outline-none placeholder:text-stone-500"
+              placeholder="Kategorie tippen, mit Komma oder Enter übernehmen"
+              @keydown="handleCategoryKeydown"
+              @blur="commitPendingCategory"
+            />
+            <datalist id="category-suggestions">
+              <option v-for="category in availableSuggestions" :key="category" :value="category" />
+            </datalist>
+          </div>
+
+          <div v-if="suggestedCategories.length" class="flex flex-wrap gap-2 pt-1">
+            <button v-for="category in suggestedCategories" :key="category" type="button" class="paper-chip rounded-full px-3 py-1 text-xs hover:text-stone-900" @click="addCategory(category)">
+              + {{ category }}
+            </button>
+          </div>
+
+          <p class="text-xs text-stone-500">Vorhandene Kategorien werden vorgeschlagen, damit nicht aus Versehen Dubletten entstehen.</p>
+        </div>
       </div>
 
       <label class="grid min-w-0 gap-2">
@@ -56,8 +83,8 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue';
-import type { LifeEvent, TimelineDate } from '../lib/types';
+import { computed, reactive, ref, watch } from 'vue';
+import { joinCategories, splitCategories, type LifeEvent, type TimelineDate } from '../lib/types';
 import { useLifelineStore } from '../stores/lifeline';
 import DateField from './DateField.vue';
 
@@ -67,20 +94,32 @@ const store = useLifelineStore();
 
 const blankDate = (): TimelineDate => ({ precision: 'day', year: new Date().getFullYear(), month: 1, day: 1 });
 const hasEndDate = ref(false);
+const categoryInput = ref('');
+const selectedCategories = ref<string[]>([]);
 const form = reactive({
   title: '',
   description: '',
-  category: '',
   startDate: blankDate(),
   endDate: blankDate(),
   isOngoing: false,
+});
+
+const knownCategories = computed(() => [...new Set(store.events.flatMap((event) => splitCategories(event.category)))].sort((a, b) => a.localeCompare(b, 'de')));
+
+const availableSuggestions = computed(() => knownCategories.value.filter((category) => !selectedCategories.value.some((entry) => entry.localeCompare(category, 'de', { sensitivity: 'accent' }) === 0)));
+
+const suggestedCategories = computed(() => {
+  const term = categoryInput.value.trim().toLocaleLowerCase('de');
+  const filtered = availableSuggestions.value.filter((category) => !term || category.toLocaleLowerCase('de').includes(term));
+  return filtered.slice(0, 8);
 });
 
 function loadFromEvent(event?: LifeEvent | null) {
   if (!event) {
     form.title = '';
     form.description = '';
-    form.category = '';
+    selectedCategories.value = [];
+    categoryInput.value = '';
     form.startDate = blankDate();
     form.endDate = blankDate();
     form.isOngoing = false;
@@ -90,7 +129,8 @@ function loadFromEvent(event?: LifeEvent | null) {
 
   form.title = event.title;
   form.description = event.description;
-  form.category = event.category;
+  selectedCategories.value = splitCategories(event.category);
+  categoryInput.value = '';
   form.startDate = { ...event.startDate };
   form.endDate = event.endDate ? { ...event.endDate } : blankDate();
   form.isOngoing = event.isOngoing;
@@ -101,11 +141,12 @@ watch(() => props.editingEvent, loadFromEvent, { immediate: true });
 
 async function submit() {
   if (!form.title.trim()) return;
+  commitPendingCategory();
 
   const payload = {
     title: form.title.trim(),
     description: form.description.trim(),
-    category: form.category.trim() || 'Alltag',
+    category: joinCategories(selectedCategories.value),
     startDate: form.startDate,
     endDate: hasEndDate.value ? form.endDate : null,
     isOngoing: hasEndDate.value ? form.isOngoing : false,
@@ -119,5 +160,33 @@ async function submit() {
 function reset() {
   loadFromEvent(null);
   emit('cancel');
+}
+
+function handleCategoryKeydown(event: KeyboardEvent) {
+  if (event.key === ',' || event.key === 'Enter') {
+    event.preventDefault();
+    commitPendingCategory();
+    return;
+  }
+
+  if (event.key === 'Backspace' && !categoryInput.value && selectedCategories.value.length) {
+    selectedCategories.value = selectedCategories.value.slice(0, -1);
+  }
+}
+
+function commitPendingCategory() {
+  if (!categoryInput.value.trim()) return;
+  const entries = splitCategories(categoryInput.value);
+  for (const entry of entries) addCategory(entry);
+  categoryInput.value = '';
+}
+
+function addCategory(category: string) {
+  const next = joinCategories([...selectedCategories.value, category]);
+  selectedCategories.value = splitCategories(next);
+}
+
+function removeCategory(category: string) {
+  selectedCategories.value = selectedCategories.value.filter((entry) => entry.toLocaleLowerCase('de') !== category.toLocaleLowerCase('de'));
 }
 </script>

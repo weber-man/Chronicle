@@ -43,6 +43,27 @@ export interface Summary {
   ongoingEvents: number;
 }
 
+function uniqueCategories(entries: string[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const entry of entries) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLocaleLowerCase('de');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+
+  return result;
+}
+
 export function splitCategories(category: string) {
-  return [...new Set(category.split(',').map((entry) => entry.trim()).filter(Boolean))];
+  return uniqueCategories(category.split(','));
+}
+
+export function joinCategories(categories: string[]) {
+  const normalized = uniqueCategories(categories);
+  return normalized.join(', ') || 'Alltag';
 }

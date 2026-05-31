@@ -570,7 +570,17 @@ function normalizeEvent(payload: z.infer<typeof eventSchema> & { userId: number 
 }
 
 function normalizeCategories(value: string) {
-  const unique = [...new Set(value.split(',').map((entry) => entry.trim()).filter(Boolean))];
+  const seen = new Set<string>();
+  const unique = value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => {
+      if (!entry) return false;
+      const key = entry.toLocaleLowerCase('de');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   return unique.join(', ') || 'Alltag';
 }
 
