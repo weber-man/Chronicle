@@ -47,7 +47,7 @@ Wichtige Umgebungsvariablen für Production:
 
 Für lokales Testen zeigt der Passwort-Reset-Request den Token im Response an. In Production ist das standardmäßig aus und sollte an einen Mail-Flow angebunden werden.
 
-## Backend als Docker-Container
+## Docker / Deployment
 
 Nur das Backend ist containerisiert.
 
@@ -62,4 +62,30 @@ docker run --rm -p 3001:3001 \
   lifeline-backend
 ```
 
-Ein Compose-Beispiel liegt in `docker-compose.backend.example.yml`.
+Beispiel mit Docker Compose:
+
+```yaml
+services:
+  lifeline:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: lifeline
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      JWT_SECRET: change-this-to-a-long-random-secret
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: change-this-admin-password
+      ADMIN_NAME: Administrator
+      ADMIN_COLOR: "#7c3aed"
+      ALLOW_REGISTRATION: "false"
+    volumes:
+      - lifeline_data:/app/data
+
+volumes:
+  lifeline_data:
+```
