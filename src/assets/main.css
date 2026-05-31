@@ -165,6 +165,12 @@ button:disabled,
   box-shadow: 0 8px 16px rgba(103, 74, 35, 0.14);
 }
 
+.paper-nav-tabs .paper-nav-link.router-link-active {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 .paper-heading {
   font-family: Georgia, "Times New Roman", ui-serif, serif;
   letter-spacing: -0.01em;
