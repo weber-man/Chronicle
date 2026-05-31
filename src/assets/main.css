@@ -119,14 +119,39 @@ body::after {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.72) inset;
 }
 
+.paper-button,
+.ink-button,
+.paper-nav-link,
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 .paper-nav {
   background: rgba(249, 241, 221, 0.82);
   border: 1px solid rgba(136, 102, 56, 0.22);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
 }
 
+.paper-nav-tabs {
+  overflow: hidden;
+}
+
+.paper-nav-indicator {
+  background: linear-gradient(180deg, rgba(255, 251, 241, 0.95), rgba(242, 228, 196, 0.95));
+  border: 1px solid rgba(136, 102, 56, 0.2);
+  box-shadow: 0 8px 16px rgba(103, 74, 35, 0.14);
+  transition: transform 220ms ease, width 220ms ease;
+}
+
 .paper-nav-link {
   color: #6a5038;
+  text-align: center;
 }
 
 .paper-nav-link:hover {

@@ -11,8 +11,9 @@
         </div>
 
         <div class="flex items-center gap-3">
-          <nav class="paper-nav flex items-center gap-2 rounded-2xl p-1.5">
-            <RouterLink v-for="item in navItems" :key="item.to" :to="item.to" class="paper-nav-link rounded-xl px-4 py-2 text-sm font-medium transition">
+          <nav class="paper-nav paper-nav-tabs relative grid grid-cols-2 items-center gap-2 rounded-2xl p-1.5">
+            <span class="paper-nav-indicator absolute top-1.5 bottom-1.5 left-1.5 rounded-xl" :style="indicatorStyle"></span>
+            <RouterLink v-for="item in navItems" :key="item.to" :to="item.to" class="paper-nav-link relative z-10 rounded-xl px-4 py-2 text-sm font-medium transition">
               {{ item.label }}
             </RouterLink>
           </nav>
@@ -29,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useLifelineStore } from './stores/lifeline';
 
@@ -41,6 +42,16 @@ const navItems = [
 const store = useLifelineStore();
 const route = useRoute();
 const router = useRouter();
+
+const activeNavIndex = computed(() => {
+  const currentPath = route.path === '/timeline' ? '/timeline' : '/';
+  return Math.max(navItems.findIndex((item) => item.to === currentPath), 0);
+});
+
+const indicatorStyle = computed(() => ({
+  width: `calc((100% - 0.5rem) / ${navItems.length})`,
+  transform: `translateX(calc(${activeNavIndex.value} * 100% + ${activeNavIndex.value} * 0.5rem))`,
+}));
 
 onMounted(async () => {
   await store.bootstrap();
