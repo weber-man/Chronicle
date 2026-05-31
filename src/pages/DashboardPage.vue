@@ -6,7 +6,7 @@
       <StatCard label="Zeitraum" :value="store.summary.rangeLabel" :hint="`${store.summary.ongoingEvents} laufende Einträge`" />
     </div>
 
-    <div class="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+    <div>
       <EventForm :editing-event="editingEvent" @saved="editingEvent = null" @cancel="editingEvent = null" />
     </div>
 
