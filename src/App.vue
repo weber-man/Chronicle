@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,248,228,0.42),_transparent_32%),linear-gradient(180deg,rgba(247,235,208,0.62)_0%,rgba(225,208,175,0.56)_55%,rgba(211,191,151,0.62)_100%)] text-stone-800">
     <div class="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-      <header v-if="store.isAuthenticated" class="paper-panel mb-6 flex flex-col gap-4 rounded-[2rem] p-5 sm:flex-row sm:items-center sm:justify-between">
+      <header v-if="store.isAuthenticated && route.name !== 'account'" class="paper-panel mb-6 flex flex-col gap-4 rounded-[2rem] p-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p class="paper-chip mb-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-amber-900">
             Chronicles
@@ -13,13 +13,13 @@
         <div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
           <SegmentedTabs :items="navItems" :model-value="activeNav" @update:model-value="openSection" />
           <div class="flex items-center gap-3 sm:pl-1">
-            <RouterLink to="/account" class="account-button rounded-2xl px-3 py-2 transition" :class="{ 'is-active': route.path === '/account' }">
+            <button class="account-button rounded-2xl px-3 py-2 transition" type="button" @click="openAccount">
               <span class="account-avatar" :style="{ backgroundColor: store.me?.color ?? '#7c3aed' }">{{ accountInitial }}</span>
               <span class="min-w-0">
                 <span class="block text-xs text-stone-500">Account</span>
                 <span class="block truncate text-sm font-medium text-stone-900">{{ store.me?.name }}</span>
               </span>
-            </RouterLink>
+            </button>
             <button class="paper-button rounded-2xl px-4 py-2 text-sm font-medium" @click="logout">Logout</button>
           </div>
         </div>
@@ -77,5 +77,10 @@ async function logout() {
 async function openSection(path: string) {
   if (route.path === path) return;
   await router.push(path);
+}
+
+async function openAccount() {
+  const from = activeNav.value || '/';
+  await router.push({ name: 'account', query: { from } });
 }
 </script>
