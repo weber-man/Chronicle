@@ -69,9 +69,7 @@ Beispiel mit Docker Compose:
 ```yaml
 services:
   lifeline:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
+    image: ghcr.io/weber-man/chronicle-backend:latest
     container_name: lifeline
     restart: unless-stopped
     ports:
