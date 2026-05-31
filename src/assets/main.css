@@ -171,6 +171,41 @@ button:disabled,
   box-shadow: none;
 }
 
+.paper-nav-tabs .paper-nav-link.is-active {
+  color: #2f2418;
+}
+
+.account-button {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 249, 236, 0.88);
+  border: 1px solid rgba(136, 102, 56, 0.24);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.72) inset;
+  color: inherit;
+  text-decoration: none;
+}
+
+.account-button:hover,
+.account-button.is-active {
+  background: rgba(255, 252, 244, 0.98);
+  border-color: rgba(122, 77, 34, 0.3);
+}
+
+.account-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fffaf0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
 .paper-heading {
   font-family: Georgia, "Times New Roman", ui-serif, serif;
   letter-spacing: -0.01em;

@@ -4,20 +4,24 @@
       <header v-if="store.isAuthenticated" class="paper-panel mb-6 flex flex-col gap-4 rounded-[2rem] p-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p class="paper-chip mb-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-amber-900">
-            Lifeline
+            Chronicles
           </p>
           <h1 class="paper-heading text-3xl font-semibold tracking-tight text-stone-900">Momente & Zeitspannen mit Kontext festhalten</h1>
           <p class="mt-2 text-sm text-stone-500">{{ store.me?.name }} · {{ store.me?.email }}<span v-if="store.isAdmin"> · Administrator</span></p>
         </div>
 
         <div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-          <nav class="paper-nav paper-nav-tabs relative grid items-center gap-2 rounded-2xl p-1.5" :style="navStyle">
-            <span class="paper-nav-indicator absolute top-1.5 bottom-1.5 left-1.5 rounded-xl" :style="indicatorStyle"></span>
-            <RouterLink v-for="item in navItems" :key="item.to" :to="item.to" class="paper-nav-link relative z-10 rounded-xl px-4 py-2 text-sm font-medium transition">
-              {{ item.label }}
+          <SegmentedTabs :items="navItems" :model-value="activeNav" @update:model-value="openSection" />
+          <div class="flex items-center gap-3 sm:pl-1">
+            <RouterLink to="/account" class="account-button rounded-2xl px-3 py-2 transition" :class="{ 'is-active': route.path === '/account' }">
+              <span class="account-avatar" :style="{ backgroundColor: store.me?.color ?? '#7c3aed' }">{{ accountInitial }}</span>
+              <span class="min-w-0">
+                <span class="block text-xs text-stone-500">Account</span>
+                <span class="block truncate text-sm font-medium text-stone-900">{{ store.me?.name }}</span>
+              </span>
             </RouterLink>
-          </nav>
-          <button class="paper-button rounded-2xl px-4 py-2 text-sm font-medium" @click="logout">Logout</button>
+            <button class="paper-button rounded-2xl px-4 py-2 text-sm font-medium" @click="logout">Logout</button>
+          </div>
         </div>
       </header>
 
@@ -32,31 +36,20 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import SegmentedTabs from './components/SegmentedTabs.vue';
 import { useLifelineStore } from './stores/lifeline';
 
 const navItems = [
-  { to: '/', label: 'Liste & Erfassen' },
-  { to: '/timeline', label: 'Timeline' },
-  { to: '/account', label: 'Account' },
+  { value: '/', label: 'Liste & Erfassen' },
+  { value: '/timeline', label: 'Timeline' },
 ];
 
 const store = useLifelineStore();
 const route = useRoute();
 const router = useRouter();
 
-const activeNavIndex = computed(() => {
-  const currentPath = navItems.some((item) => item.to === route.path) ? route.path : '/';
-  return Math.max(navItems.findIndex((item) => item.to === currentPath), 0);
-});
-
-const navStyle = computed(() => ({
-  gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))`,
-}));
-
-const indicatorStyle = computed(() => ({
-  width: `calc((100% - ${(navItems.length - 1) * 0.5}rem) / ${navItems.length})`,
-  transform: `translateX(calc(${activeNavIndex.value} * 100% + ${activeNavIndex.value} * 0.5rem))`,
-}));
+const activeNav = computed(() => (navItems.some((item) => item.value === route.path) ? route.path : '/'));
+const accountInitial = computed(() => (store.me?.name?.trim().charAt(0) || 'A').toUpperCase());
 
 onMounted(async () => {
   await store.bootstrap();
@@ -79,5 +72,10 @@ watch(
 async function logout() {
   await store.logout();
   await router.replace({ name: 'login' });
+}
+
+async function openSection(path: string) {
+  if (route.path === path) return;
+  await router.push(path);
 }
 </script>

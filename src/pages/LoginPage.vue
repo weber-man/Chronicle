@@ -1,16 +1,12 @@
 <template>
   <section class="mx-auto max-w-md paper-panel rounded-[2rem] p-6">
     <div class="mb-6 text-center">
-      <p class="paper-chip mx-auto mb-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-amber-900">Lifeline</p>
+      <p class="paper-chip mx-auto mb-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-amber-900">Chronicles</p>
       <h1 class="paper-heading text-3xl font-semibold text-stone-900">{{ heading }}</h1>
       <p class="mt-2 text-sm text-stone-500">{{ subline }}</p>
     </div>
 
-    <div class="mb-4 flex rounded-2xl paper-nav p-1">
-      <button class="flex-1 rounded-xl px-4 py-2 text-sm font-medium" :class="mode === 'login' ? activeClass : baseClass" @click="switchMode('login')">Login</button>
-      <button v-if="store.allowRegistration" class="flex-1 rounded-xl px-4 py-2 text-sm font-medium" :class="mode === 'register' ? activeClass : baseClass" @click="switchMode('register')">Account erstellen</button>
-      <button class="flex-1 rounded-xl px-4 py-2 text-sm font-medium" :class="mode.startsWith('reset') ? activeClass : baseClass" @click="switchMode('reset-request')">Passwort reset</button>
-    </div>
+    <SegmentedTabs class="mb-4" :items="tabItems" :model-value="activeTab" @update:model-value="switchMode" />
 
     <form class="grid gap-4" @submit.prevent="submit">
       <label v-if="mode === 'register'" class="grid gap-2">
@@ -35,7 +31,7 @@
 
       <label v-if="mode !== 'reset-request'" class="grid gap-2">
         <span class="text-sm text-stone-600">Passwort</span>
-        <input v-model="form.password" type="password" class="paper-input rounded-2xl px-4 py-3" :placeholder="mode === 'reset-confirm' ? 'Neues Passwort' : 'Mindestens 12 Zeichen'" />
+        <input v-model="form.password" type="password" class="paper-input rounded-2xl px-4 py-3" :placeholder="passwordPlaceholder" />
       </label>
 
       <label v-if="mode === 'reset-confirm'" class="grid gap-2">
@@ -66,6 +62,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import SegmentedTabs from '../components/SegmentedTabs.vue';
 import { useLifelineStore } from '../stores/lifeline';
 
 type Mode = 'login' | 'register' | 'reset-request' | 'reset-confirm';
@@ -86,8 +83,14 @@ const form = reactive({
   resetToken: '',
 });
 
-const activeClass = 'paper-nav-link router-link-active';
-const baseClass = 'paper-nav-link';
+const tabItems = computed(() => {
+  const items = [{ value: 'login', label: 'Login' }];
+  if (store.allowRegistration) items.push({ value: 'register', label: 'Account erstellen' });
+  items.push({ value: 'reset-request', label: 'Passwort-Reset' });
+  return items;
+});
+
+const activeTab = computed(() => (mode.value.startsWith('reset') ? 'reset-request' : mode.value));
 
 const heading = computed(() => {
   switch (mode.value) {
@@ -123,6 +126,17 @@ const submitLabel = computed(() => {
       return 'Passwort erneuern';
     default:
       return 'Einloggen';
+  }
+});
+
+const passwordPlaceholder = computed(() => {
+  switch (mode.value) {
+    case 'register':
+      return 'Mindestens 12 Zeichen';
+    case 'reset-confirm':
+      return 'Neues Passwort';
+    default:
+      return 'Dein Passwort';
   }
 });
 

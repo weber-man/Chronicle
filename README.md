@@ -1,4 +1,4 @@
-# Lifeline
+# Chronicles
 
 Moderne kleine Fullstack-App für Lebensereignisse und Zeitspannen.
 
@@ -54,23 +54,23 @@ Für lokales Testen zeigt der Passwort-Reset-Request den Token im Response an. I
 Das Image baut Frontend und Backend zusammen. Der Container liefert die App und `/api` über denselben Port aus.
 
 ```bash
-docker build -f Dockerfile.backend -t lifeline-backend .
+docker build -f Dockerfile.backend -t chronicles-backend .
 docker run --rm -p 3001:3001 \
   -e NODE_ENV=production \
   -e JWT_SECRET='change-me' \
   -e ADMIN_EMAIL='admin@example.com' \
   -e ADMIN_PASSWORD='change-me-too' \
-  -v lifeline_data:/app/data \
-  lifeline-backend
+  -v chronicles_data:/app/data \
+  chronicles-backend
 ```
 
 Beispiel mit Docker Compose:
 
 ```yaml
 services:
-  lifeline:
+  chronicles:
     image: ghcr.io/weber-man/chronicle-backend:latest
-    container_name: lifeline
+    container_name: chronicles
     restart: unless-stopped
     ports:
       - "3001:3001"
@@ -84,15 +84,15 @@ services:
       ADMIN_COLOR: "#7c3aed"
       ALLOW_REGISTRATION: "false"
     volumes:
-      - lifeline_data:/app/data
+      - chronicles_data:/app/data
 
 volumes:
-  lifeline_data:
+  chronicles_data:
 ```
 
 ### Reverse Proxy
 
-- Proxy auf den Lifeline-Container-Port, z. B. `http://127.0.0.1:3001`.
+- Proxy auf den Chronicles-Container-Port, z. B. `http://127.0.0.1:3001`.
 - Wenn dein Proxy eine Content-Security-Policy setzt, darf sie nicht `default-src 'none'` sein, sonst werden die Frontend-Assets blockiert.
 - Minimal brauchbar ist z. B.:
 
