@@ -43,7 +43,6 @@
             </button>
           </div>
 
-          <p class="text-xs text-stone-500">Vorhandene Kategorien werden vorgeschlagen, damit nicht aus Versehen Dubletten entstehen.</p>
         </div>
       </div>
 
