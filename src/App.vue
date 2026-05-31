@@ -10,8 +10,8 @@
           <p class="mt-2 text-sm text-stone-500">{{ store.me?.name }} · {{ store.me?.email }}<span v-if="store.isAdmin"> · Administrator</span></p>
         </div>
 
-        <div class="flex items-center gap-3">
-          <nav class="paper-nav paper-nav-tabs relative grid grid-cols-2 items-center gap-2 rounded-2xl p-1.5">
+        <div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+          <nav class="paper-nav paper-nav-tabs relative grid items-center gap-2 rounded-2xl p-1.5" :style="navStyle">
             <span class="paper-nav-indicator absolute top-1.5 bottom-1.5 left-1.5 rounded-xl" :style="indicatorStyle"></span>
             <RouterLink v-for="item in navItems" :key="item.to" :to="item.to" class="paper-nav-link relative z-10 rounded-xl px-4 py-2 text-sm font-medium transition">
               {{ item.label }}
@@ -49,8 +49,12 @@ const activeNavIndex = computed(() => {
   return Math.max(navItems.findIndex((item) => item.to === currentPath), 0);
 });
 
+const navStyle = computed(() => ({
+  gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))`,
+}));
+
 const indicatorStyle = computed(() => ({
-  width: `calc((100% - 0.5rem) / ${navItems.length})`,
+  width: `calc((100% - ${(navItems.length - 1) * 0.5}rem) / ${navItems.length})`,
   transform: `translateX(calc(${activeNavIndex.value} * 100% + ${activeNavIndex.value} * 0.5rem))`,
 }));
 
