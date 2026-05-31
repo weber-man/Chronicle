@@ -267,6 +267,26 @@ test('invalid date ranges are rejected with a validation-style error', async () 
   }
 });
 
+test('comma-separated categories are normalized as separate categories', async () => {
+  const fixture = makeFixture();
+  try {
+    const agent = request.agent(fixture.app);
+    const auth = await register(agent, { email: 'categories@example.com' });
+    const response = await agent.post('/api/events').set('x-csrf-token', auth.csrfToken).send({
+      title: 'Mehrere Kategorien',
+      description: '',
+      category: 'Reisen, Familie, Reisen,  Beruf ',
+      startDate: { precision: 'year', year: 2025 },
+      endDate: null,
+      isOngoing: false,
+    });
+    assert.equal(response.status, 201);
+    assert.equal(response.body.category, 'Reisen, Familie, Beruf');
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test('password verification rejects malformed hashes and accepts valid ones', () => {
   const hashed = hashPassword('VerySecurePass123!');
   assert.equal(verifyPassword('VerySecurePass123!', hashed), true);

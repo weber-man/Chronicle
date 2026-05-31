@@ -52,7 +52,7 @@ const timelineDateSchema = z.object({
 const eventSchema = z.object({
   title: z.string().trim().min(1).max(120),
   description: z.string().trim().max(1000).default(''),
-  category: z.string().trim().min(1).max(40).default('Alltag'),
+  category: z.string().trim().min(1).max(200).default('Alltag'),
   startDate: timelineDateSchema,
   endDate: timelineDateSchema.nullable(),
   isOngoing: z.boolean().default(false),
@@ -560,13 +560,18 @@ function normalizeEvent(payload: z.infer<typeof eventSchema> & { userId: number 
     userId: payload.userId,
     title: payload.title,
     description: payload.description,
-    category: payload.category,
+    category: normalizeCategories(payload.category),
     startDate: JSON.stringify(startDate),
     endDate: endDate ? JSON.stringify(endDate) : null,
     isOngoing: payload.isOngoing ? 1 : 0,
     sortStart: sortKey(startDate, false),
     sortEnd: sortKey(endDate ?? startDate, true),
   };
+}
+
+function normalizeCategories(value: string) {
+  const unique = [...new Set(value.split(',').map((entry) => entry.trim()).filter(Boolean))];
+  return unique.join(', ') || 'Alltag';
 }
 
 function cleanDate(date: TimelineDate): TimelineDate {

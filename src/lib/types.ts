@@ -42,3 +42,7 @@ export interface Summary {
   rangeLabel: string;
   ongoingEvents: number;
 }
+
+export function splitCategories(category: string) {
+  return [...new Set(category.split(',').map((entry) => entry.trim()).filter(Boolean))];
+}

@@ -103,7 +103,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { formatEventRange, numericValue, timelineBounds } from '../lib/date';
-import type { LifeEvent, User } from '../lib/types';
+import { splitCategories, type LifeEvent, type User } from '../lib/types';
 
 const props = defineProps<{ events: LifeEvent[]; users: User[] }>();
 
@@ -112,7 +112,7 @@ const typeFilter = ref<'all' | 'points' | 'ranges' | 'ongoing'>('all');
 const categoryFilter = ref('all');
 const sortMode = ref<'start-asc' | 'start-desc' | 'duration-desc' | 'title-asc'>('start-asc');
 
-const categories = computed(() => [...new Set(props.events.map((event) => event.category))].sort((a, b) => a.localeCompare(b, 'de')));
+const categories = computed(() => [...new Set(props.events.flatMap((event) => splitCategories(event.category)))].sort((a, b) => a.localeCompare(b, 'de')));
 
 const filteredEvents = computed(() => {
   const term = search.value.trim().toLocaleLowerCase('de');
@@ -122,7 +122,7 @@ const filteredEvents = computed(() => {
       if (typeFilter.value === 'points' && (event.endDate || event.isOngoing)) return false;
       if (typeFilter.value === 'ranges' && !event.endDate) return false;
       if (typeFilter.value === 'ongoing' && !event.isOngoing) return false;
-      if (categoryFilter.value !== 'all' && event.category !== categoryFilter.value) return false;
+      if (categoryFilter.value !== 'all' && !splitCategories(event.category).includes(categoryFilter.value)) return false;
       if (!term) return true;
       const haystack = `${event.title} ${event.description} ${event.category} ${userName(event.userId)}`.toLocaleLowerCase('de');
       return haystack.includes(term);

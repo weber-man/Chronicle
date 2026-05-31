@@ -18,7 +18,7 @@
           <div class="space-y-3">
             <div class="flex flex-wrap items-center gap-2">
               <span class="rounded-full border border-amber-900/18 bg-amber-100/70 px-3 py-1 text-xs font-medium text-amber-950">{{ formatEventRange(event) }}</span>
-              <span class="paper-chip rounded-full px-3 py-1 text-xs">{{ event.category }}</span>
+              <span v-for="category in eventCategories(event.category)" :key="`${event.id}-${category}`" class="paper-chip rounded-full px-3 py-1 text-xs">{{ category }}</span>
               <span class="paper-chip rounded-full px-3 py-1 text-xs">{{ userName(event.userId) }}</span>
               <span v-if="event.endDate" class="rounded-full border border-emerald-900/15 bg-emerald-100/65 px-3 py-1 text-xs text-emerald-950">{{ eventDurationLabel(event) }}</span>
             </div>
@@ -40,12 +40,16 @@
 
 <script setup lang="ts">
 import { formatEventRange, eventDurationLabel } from '../lib/date';
-import type { LifeEvent, User } from '../lib/types';
+import { splitCategories, type LifeEvent, type User } from '../lib/types';
 
 const props = defineProps<{ events: LifeEvent[]; users: User[] }>();
 defineEmits<{ edit: [event: LifeEvent]; remove: [event: LifeEvent] }>();
 
 function userName(userId: number) {
   return props.users.find((user) => user.id === userId)?.name ?? 'Unbekannt';
+}
+
+function eventCategories(category: string) {
+  return splitCategories(category);
 }
 </script>
