@@ -137,6 +137,13 @@ export function createApp(options: AppOptions = {}) {
   const exposeResetToken = process.env.NODE_ENV !== 'production' || process.env.PASSWORD_RESET_DEBUG === 'true';
   const authLimiter = createRateLimiter();
 
+  logInfo('startup.database_ready', {
+    dbPath,
+    environment: process.env.NODE_ENV ?? 'development',
+    allowRegistration,
+    frontendBundled: fs.existsSync(clientIndexPath),
+  });
+
   ensureSchema(db);
   bootstrapAdmin(db, {
     email: options.adminEmail ?? process.env.ADMIN_EMAIL,
@@ -167,12 +174,16 @@ export function createApp(options: AppOptions = {}) {
   });
 
   app.post('/api/auth/register', authLimiter('register', LOGIN_ATTEMPT_LIMIT), (req, res) => {
-    if (!allowRegistration) return res.status(403).json({ message: 'Registrierung ist deaktiviert.' });
+    if (!allowRegistration) {
+      logWarn('auth.register_blocked', requestMeta(req, { reason: 'registration_disabled' }));
+      return res.status(403).json({ message: 'Registrierung ist deaktiviert.' });
+    }
     const payload = registerSchema.parse(req.body);
     ensureUniqueEmail(db, payload.email);
 
     const role: Role = activeUserCount(db) === 0 ? 'admin' : 'user';
     const created = createUser(db, { ...payload, role });
+    logInfo('auth.register_success', requestMeta(req, { userId: created.id, email: created.email, role: created.role }));
     attachAuthCookies(res, created, jwtSecret, secureCookies);
     res.status(201).json({ user: created, csrfToken: readSetCookieValue(res, CSRF_COOKIE) });
   });
@@ -181,15 +192,18 @@ export function createApp(options: AppOptions = {}) {
     const payload = loginSchema.parse(req.body);
     const row = getUserRowByEmail(db, payload.email);
     if (!row?.passwordHash || !verifyPassword(payload.password, row.passwordHash)) {
+      logWarn('auth.login_failed', requestMeta(req, { email: payload.email, reason: 'invalid_credentials' }));
       return res.status(401).json({ message: 'E-Mail oder Passwort falsch.' });
     }
 
     const user = sanitizeUser(row);
+    logInfo('auth.login_success', requestMeta(req, { userId: user.id, email: user.email, role: user.role }));
     attachAuthCookies(res, user, jwtSecret, secureCookies);
     res.json({ user, csrfToken: readSetCookieValue(res, CSRF_COOKIE) });
   });
 
-  app.post('/api/auth/logout', (_req, res) => {
+  app.post('/api/auth/logout', (req, res) => {
+    logInfo('auth.logout', requestMeta(req, { userId: req.auth?.id ?? null }));
     clearAuthCookies(res, secureCookies);
     res.json({ ok: true });
   });
@@ -207,12 +221,16 @@ export function createApp(options: AppOptions = {}) {
         VALUES (?, ?, ?)
       `).run(row.id, hashResetToken(rawToken), expiresAt);
 
+      logInfo('auth.password_reset_requested', requestMeta(req, { userId: row.id, email: payload.email }));
+
       return res.json({
         ok: true,
         message: 'Falls ein passender Account existiert, wurde ein Reset gestartet.',
         ...(exposeResetToken ? { resetToken: rawToken, expiresAt } : {}),
       });
     }
+
+    logWarn('auth.password_reset_requested_unknown_email', requestMeta(req, { email: payload.email }));
 
     return res.json({ ok: true, message: 'Falls ein passender Account existiert, wurde ein Reset gestartet.' });
   });
@@ -228,6 +246,7 @@ export function createApp(options: AppOptions = {}) {
     `).get(hashResetToken(payload.token)) as { id: number; userId: number; expiresAt: string; usedAt: string | null } | undefined;
 
     if (!tokenRow || tokenRow.usedAt || new Date(tokenRow.expiresAt).getTime() < Date.now()) {
+      logWarn('auth.password_reset_failed', requestMeta(req, { reason: 'invalid_or_expired_token' }));
       return res.status(400).json({ message: 'Reset-Token ist ungültig oder abgelaufen.' });
     }
 
@@ -238,6 +257,7 @@ export function createApp(options: AppOptions = {}) {
     `).run(hashPassword(payload.password), tokenRow.userId);
     db.prepare(`UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ?`).run(tokenRow.id);
     deletePasswordResetTokensForUser(db, tokenRow.userId, tokenRow.id);
+    logInfo('auth.password_reset_success', requestMeta(req, { userId: tokenRow.userId }));
     clearAuthCookies(res, secureCookies);
     return res.json({ ok: true, message: 'Passwort wurde zurückgesetzt. Bitte neu anmelden.' });
   });
@@ -261,6 +281,7 @@ export function createApp(options: AppOptions = {}) {
       VALUES (@userId, @title, @description, @category, @startDate, @endDate, @isOngoing, @sortStart, @sortEnd)
     `).run(normalized);
 
+    logInfo('events.created', requestMeta(req, { userId: req.auth!.id, eventId: Number(result.lastInsertRowid), title: payload.title }));
     res.status(201).json(getEventById(db, Number(result.lastInsertRowid), req.auth!.id));
   });
 
@@ -283,6 +304,7 @@ export function createApp(options: AppOptions = {}) {
       WHERE id = @id AND user_id = @userId
     `).run({ ...normalized, id: eventId });
 
+    logInfo('events.updated', requestMeta(req, { userId: req.auth!.id, eventId, title: payload.title }));
     res.json(getEventById(db, eventId, req.auth!.id));
   });
 
@@ -290,6 +312,7 @@ export function createApp(options: AppOptions = {}) {
     const eventId = Number(req.params.id);
     ensureEventOwner(db, eventId, req.auth!.id);
     db.prepare('DELETE FROM events WHERE id = ? AND user_id = ?').run(eventId, req.auth!.id);
+    logInfo('events.deleted', requestMeta(req, { userId: req.auth!.id, eventId }));
     res.json({ ok: true });
   });
 
@@ -330,14 +353,17 @@ export function createApp(options: AppOptions = {}) {
     const payload = deleteAccountSchema.parse(req.body);
     const row = getUserRowById(db, req.auth!.id);
     if (!row?.passwordHash || !verifyPassword(payload.password, row.passwordHash)) {
+      logWarn('account.delete_failed', requestMeta(req, { userId: req.auth!.id, reason: 'invalid_password' }));
       return res.status(400).json({ message: 'Passwort ist falsch.' });
     }
 
     if (row.role === 'admin' && adminCount(db) <= 1) {
+      logWarn('account.delete_failed', requestMeta(req, { userId: req.auth!.id, reason: 'last_admin' }));
       return res.status(400).json({ message: 'Der letzte Administrator kann nicht gelöscht werden.' });
     }
 
     db.prepare('DELETE FROM users WHERE id = ?').run(req.auth!.id);
+    logInfo('account.deleted', requestMeta(req, { userId: req.auth!.id, email: row.email }));
     clearAuthCookies(res, secureCookies);
     res.json({ ok: true });
   });
@@ -350,6 +376,7 @@ export function createApp(options: AppOptions = {}) {
     const payload = createUserSchema.parse(req.body);
     ensureUniqueEmail(db, payload.email);
     const user = createUser(db, payload);
+    logInfo('admin.user_created', requestMeta(req, { actorUserId: req.auth!.id, userId: user.id, email: user.email, role: user.role }));
     res.status(201).json({ user });
   });
 
@@ -378,6 +405,7 @@ export function createApp(options: AppOptions = {}) {
       passwordHash: payload.password ? hashPassword(payload.password) : null,
     });
 
+    logInfo('admin.user_updated', requestMeta(req, { actorUserId: req.auth!.id, userId }));
     res.json({ user: getUserById(db, userId) });
   });
 
@@ -390,17 +418,21 @@ export function createApp(options: AppOptions = {}) {
 
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     if (error instanceof z.ZodError) {
+      logWarn('request.validation_failed', requestMeta(_req, { message: error.issues[0]?.message ?? 'Ungültige Eingabe.' }));
       return res.status(400).json({ message: error.issues[0]?.message ?? 'Ungültige Eingabe.' });
     }
 
     if (error instanceof AuthError) {
+      logWarn('request.auth_failed', requestMeta(_req, { status: error.status, message: error.message }));
       return res.status(error.status).json({ message: error.message });
     }
 
     if (error instanceof Error) {
+      logError('request.failed', requestMeta(_req, { message: error.message, stack: error.stack }));
       return res.status(400).json({ message: error.message });
     }
 
+    logError('request.failed_unknown', requestMeta(_req));
     return res.status(500).json({ message: 'Unbekannter Serverfehler.' });
   });
 
@@ -409,6 +441,28 @@ export function createApp(options: AppOptions = {}) {
 
 function defaultDbPath() {
   return path.join(process.cwd(), 'data', 'lifeline.sqlite');
+}
+
+function requestMeta(req: express.Request, extra: Record<string, unknown> = {}) {
+  return {
+    method: req.method,
+    path: req.path,
+    ip: req.ip,
+    userId: req.auth?.id ?? null,
+    ...extra,
+  };
+}
+
+function logInfo(event: string, meta: Record<string, unknown> = {}) {
+  console.info(`[lifeline] ${event}`, meta);
+}
+
+function logWarn(event: string, meta: Record<string, unknown> = {}) {
+  console.warn(`[lifeline] ${event}`, meta);
+}
+
+function logError(event: string, meta: Record<string, unknown> = {}) {
+  console.error(`[lifeline] ${event}`, meta);
 }
 
 function ensureSchema(db: Database.Database) {
