@@ -85,8 +85,8 @@ const form = reactive({
 
 const tabItems = computed(() => {
   const items = [{ value: 'login', label: 'Login' }];
-  if (store.allowRegistration) items.push({ value: 'register', label: 'Account erstellen' });
-  items.push({ value: 'reset-request', label: 'Passwort-Reset' });
+  if (store.allowRegistration) items.push({ value: 'register', label: 'Registrieren' });
+  items.push({ value: 'reset-request', label: 'Reset' });
   return items;
 });
 
