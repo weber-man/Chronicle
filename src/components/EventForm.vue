@@ -1,5 +1,5 @@
 <template>
-  <section class="paper-panel rounded-[2rem] p-5">
+  <section class="paper-panel panel-reveal rounded-[2rem] p-5">
     <div class="mb-5 flex items-center justify-between gap-4">
       <div>
         <p class="text-sm font-medium text-stone-500">Erfassen</p>
@@ -73,7 +73,7 @@
       </div>
 
       <div class="flex flex-wrap gap-3 pt-2">
-        <button class="ink-button rounded-2xl px-5 py-3 font-medium transition hover:scale-[1.01]" type="submit">
+        <button class="ink-button interactive-lift rounded-2xl px-5 py-3 font-medium transition hover:scale-[1.01]" type="submit">
           {{ editingEvent ? 'Ereignis aktualisieren' : 'Ereignis speichern' }}
         </button>
       </div>

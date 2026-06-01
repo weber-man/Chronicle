@@ -1,5 +1,5 @@
 <template>
-  <section class="paper-panel rounded-[2rem] p-5">
+  <section class="paper-panel panel-reveal rounded-[2rem] p-5">
     <div class="mb-5 flex items-center justify-between gap-4">
       <div>
         <p class="text-sm font-medium text-stone-500">Chronologische Liste</p>
@@ -12,8 +12,8 @@
       Noch nichts drin. Trag den ersten prägenden Moment ein.
     </div>
 
-    <div v-else class="space-y-4">
-      <article v-for="event in events" :key="event.id" class="group rounded-3xl border border-amber-900/18 bg-[rgba(255,251,242,0.74)] p-5 shadow-[0_1px_0_rgba(255,255,255,0.55)_inset] transition hover:border-amber-900/28 hover:bg-[rgba(255,248,235,0.9)]">
+    <div v-else class="space-y-4 stagger-group">
+      <article v-for="event in events" :key="event.id" class="group list-card rounded-3xl border border-amber-900/18 bg-[rgba(255,251,242,0.74)] p-5 shadow-[0_1px_0_rgba(255,255,255,0.55)_inset] transition hover:border-amber-900/28 hover:bg-[rgba(255,248,235,0.9)]">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="space-y-3">
             <div class="flex flex-wrap items-center gap-2">

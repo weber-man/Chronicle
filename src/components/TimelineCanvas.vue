@@ -1,5 +1,5 @@
 <template>
-  <section class="paper-panel rounded-[2rem] p-5">
+  <section class="paper-panel panel-reveal timeline-shell rounded-[2rem] p-5">
     <div class="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <p class="text-sm font-medium text-stone-500">Visuelle Timeline</p>
@@ -73,7 +73,7 @@
           <div
             v-for="event in positionedEvents"
             :key="event.id"
-            class="grid grid-cols-[17rem_minmax(0,1fr)] items-center gap-4 rounded-2xl px-2 py-2 hover:bg-amber-50/35"
+            class="timeline-row grid grid-cols-[17rem_minmax(0,1fr)] items-center gap-4 rounded-2xl px-2 py-2 hover:bg-amber-50/35"
             :title="eventMeta(event.rawEvent)"
           >
             <div class="min-w-0">
@@ -86,11 +86,11 @@
 
               <template v-if="event.isInstant">
                 <div class="absolute inset-y-1 w-px bg-amber-900/45" :style="{ left: `${event.left}%` }"></div>
-                <div class="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full border border-[#f8efe0] shadow-sm" :style="pointStyle(event.rawEvent, event.left)"></div>
+                <div class="timeline-point absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full border border-[#f8efe0] shadow-sm" :style="pointStyle(event.rawEvent, event.left)"></div>
               </template>
 
               <template v-else>
-                <div class="absolute top-1/2 h-2.5 -translate-y-1/2 rounded-full shadow-sm" :style="rangeStyle(event)"></div>
+                <div class="timeline-range absolute top-1/2 h-2.5 -translate-y-1/2 rounded-full shadow-sm" :style="rangeStyle(event)"></div>
               </template>
             </div>
           </div>

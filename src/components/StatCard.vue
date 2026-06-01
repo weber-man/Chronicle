@@ -1,5 +1,5 @@
 <template>
-  <div class="paper-panel rounded-3xl p-5">
+  <div class="paper-panel metric-card panel-reveal rounded-3xl p-5">
     <p class="text-sm text-stone-500">{{ label }}</p>
     <div class="mt-3 flex items-end justify-between gap-3">
       <div>
