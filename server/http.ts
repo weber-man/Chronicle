@@ -3,28 +3,43 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
 import type express from 'express';
-import { createCsrfToken, signAccessToken, tokenTtlSeconds, verifyAccessToken } from './auth.js';
+import {
+  createCsrfToken,
+  signAccessToken,
+  signCsrfToken,
+  tokenTtlSeconds,
+  verifyAccessToken,
+  verifyCsrfToken,
+} from './auth.js';
 import { HttpError } from './errors.js';
 import { getUserSession } from './users.js';
 import type { SanitizedUser } from './types.js';
 
 export const AUTH_COOKIE = 'lifeline_auth';
 export const CSRF_COOKIE = 'lifeline_csrf';
+export const SECURE_AUTH_COOKIE = '__Host-lifeline_auth';
+export const SECURE_CSRF_COOKIE = '__Host-lifeline_csrf';
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const MAX_RATE_LIMIT_ENTRIES = 50_000;
 
 export function createAuthMiddleware(db: Database.Database, jwtSecret: string) {
   return (req: express.Request, _res: express.Response, next: express.NextFunction) => {
-    const token = readCookie(req.headers.cookie, AUTH_COOKIE);
-    if (!token) return next();
-    try {
-      const payload = verifyAccessToken(token, jwtSecret);
-      if (payload.type !== 'access') return next();
-      const session = getUserSession(db, Number(payload.sub));
-      if (session && Number(payload.ver ?? 0) === session.sessionVersion) {
-        req.auth = session.user;
+    const tokens = [SECURE_AUTH_COOKIE, AUTH_COOKIE]
+      .map((cookieName) => readCookie(req.headers.cookie, cookieName))
+      .filter((token): token is string => Boolean(token));
+    for (const token of tokens) {
+      try {
+        const payload = verifyAccessToken(token, jwtSecret);
+        if (payload.type !== 'access') continue;
+        const session = getUserSession(db, Number(payload.sub));
+        if (session && Number(payload.ver ?? 0) === session.sessionVersion) {
+          req.auth = session.user;
+          req.authSessionVersion = session.sessionVersion;
+          break;
+        }
+      } catch {
+        // Try the next cookie name (legacy vs __Host-).
       }
-    } catch {
-      req.auth = undefined;
     }
     return next();
   };
@@ -37,11 +52,13 @@ export function attachAuthCookies(
   secureCookies: boolean,
 ) {
   const token = signToken(user, jwtSecret);
-  const csrfToken = createCsrfToken();
+  const csrfToken = signCsrfToken(createCsrfToken(), user.id, user.sessionVersion, jwtSecret);
   const ttl = tokenTtlSeconds();
+  const authCookie = secureCookies ? SECURE_AUTH_COOKIE : AUTH_COOKIE;
+  const csrfCookie = secureCookies ? SECURE_CSRF_COOKIE : CSRF_COOKIE;
   res.setHeader('Set-Cookie', [
-    serializeCookie(AUTH_COOKIE, token, { httpOnly: true, maxAge: ttl, sameSite: 'Lax', secure: secureCookies }),
-    serializeCookie(CSRF_COOKIE, csrfToken, { httpOnly: false, maxAge: ttl, sameSite: 'Lax', secure: secureCookies }),
+    serializeCookie(authCookie, token, { httpOnly: true, maxAge: ttl, sameSite: 'Lax', secure: secureCookies }),
+    serializeCookie(csrfCookie, csrfToken, { httpOnly: false, maxAge: ttl, sameSite: 'Lax', secure: secureCookies }),
   ]);
   return csrfToken;
 }
@@ -50,6 +67,8 @@ export function clearAuthCookies(res: express.Response, secureCookies: boolean) 
   res.setHeader('Set-Cookie', [
     serializeCookie(AUTH_COOKIE, '', { httpOnly: true, maxAge: 0, sameSite: 'Lax', secure: secureCookies }),
     serializeCookie(CSRF_COOKIE, '', { httpOnly: false, maxAge: 0, sameSite: 'Lax', secure: secureCookies }),
+    serializeCookie(SECURE_AUTH_COOKIE, '', { httpOnly: true, maxAge: 0, sameSite: 'Lax', secure: true }),
+    serializeCookie(SECURE_CSRF_COOKIE, '', { httpOnly: false, maxAge: 0, sameSite: 'Lax', secure: true }),
   ]);
 }
 
@@ -64,17 +83,33 @@ export function requireAdmin(req: express.Request, _res: express.Response, next:
   return next();
 }
 
-export function requireCsrfForWrites(req: express.Request, _res: express.Response, next: express.NextFunction) {
-  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
-  if (!req.path.startsWith('/auth/') && !req.auth) return next(new HttpError(401, 'Nicht angemeldet.'));
-  if (req.path === '/auth/login' || req.path === '/auth/register' || req.path === '/auth/logout') return next();
+export function requireCsrfForWrites(jwtSecret: string, allowedOrigins: string[] = []) {
+  return (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+    if (!req.auth) return next(new HttpError(401, 'Nicht angemeldet.'));
 
-  const csrfCookie = readCookie(req.headers.cookie, CSRF_COOKIE);
-  const csrfHeader = req.header('x-csrf-token');
-  if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
-    return next(new HttpError(403, 'CSRF-Token fehlt oder ist ungültig.'));
-  }
-  return next();
+    const origin = req.header('origin');
+    if (origin && !isAllowedOrigin(origin, req, allowedOrigins)) {
+      return next(new HttpError(403, 'CSRF-Origin ist ungültig.'));
+    }
+
+    const csrfCookies = [SECURE_CSRF_COOKIE, CSRF_COOKIE]
+      .map((cookieName) => readCookie(req.headers.cookie, cookieName))
+      .filter((token): token is string => Boolean(token));
+    const csrfHeader = req.header('x-csrf-token');
+    if (!csrfHeader) {
+      return next(new HttpError(403, 'CSRF-Token fehlt oder ist ungültig.'));
+    }
+    for (const csrfCookie of csrfCookies) {
+      if (
+        timingSafeEqualString(csrfCookie, csrfHeader)
+        && verifyCsrfToken(csrfCookie, req.auth.id, req.authSessionVersion ?? 0, jwtSecret)
+      ) {
+        return next();
+      }
+    }
+    return next(new HttpError(403, 'CSRF-Token ist ungültig oder abgelaufen.'));
+  };
 }
 
 export function securityHeaders(secure: boolean) {
@@ -121,31 +156,51 @@ export function createRateLimiter() {
   const attempts = new Map<string, { count: number; resetAt: number }>();
   let calls = 0;
 
-  return (scope: string, limit: number) => (req: express.Request, _res: express.Response, next: express.NextFunction) => {
-    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-    const actor = req.auth?.id ? `u${req.auth.id}` : email;
-    const key = [scope, req.ip, actor].filter(Boolean).join(':');
+  const prune = (now: number) => {
+    for (const [entryKey, entry] of attempts) {
+      if (entry.resetAt <= now) attempts.delete(entryKey);
+    }
+  };
+
+  return (scope: string, limit: number, ipLimit = limit) => (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const now = Date.now();
+    const rawEmail = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const email = rawEmail.length > 0 && rawEmail.length <= 254 ? rawEmail : '';
+    const keys: Array<{ key: string; limit: number }> = [
+      { key: `${scope}:ip:${req.ip}`, limit: ipLimit },
+    ];
+    if (req.auth?.id) {
+      keys.push({ key: `${scope}:user:${req.auth.id}`, limit });
+    } else if (email) {
+      keys.push({ key: `${scope}:email:${email}`, limit });
+    }
 
     calls += 1;
-    if (calls % 250 === 0) {
-      for (const [entryKey, entry] of attempts) {
-        if (entry.resetAt <= now) attempts.delete(entryKey);
+    if (calls % 250 === 0) prune(now);
+    if (attempts.size > MAX_RATE_LIMIT_ENTRIES) {
+      prune(now);
+      if (attempts.size > MAX_RATE_LIMIT_ENTRIES) {
+        res.setHeader('Retry-After', String(Math.ceil(RATE_LIMIT_WINDOW_MS / 1000)));
+        return next(new HttpError(429, 'Zu viele Versuche. Bitte später erneut probieren.'));
       }
     }
 
-    const current = attempts.get(key);
-    if (!current || current.resetAt <= now) {
-      attempts.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-      return next();
+    for (const entry of keys) {
+      const current = attempts.get(entry.key);
+      if (current && current.resetAt > now && current.count >= entry.limit) {
+        res.setHeader('Retry-After', String(Math.max(1, Math.ceil((current.resetAt - now) / 1000))));
+        return next(new HttpError(429, 'Zu viele Versuche. Bitte später erneut probieren.'));
+      }
     }
 
-    if (current.count >= limit) {
-      return next(new HttpError(429, 'Zu viele Versuche. Bitte später erneut probieren.'));
+    for (const entry of keys) {
+      const current = attempts.get(entry.key);
+      if (!current || current.resetAt <= now) {
+        attempts.set(entry.key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+      } else {
+        current.count += 1;
+      }
     }
-
-    current.count += 1;
-    attempts.set(key, current);
     return next();
   };
 }
@@ -181,6 +236,10 @@ export function readSetCookieValue(res: express.Response, cookieName: string) {
   const cookies = Array.isArray(header) ? header : typeof header === 'string' ? [header] : [];
   const found = cookies.find((entry) => entry.startsWith(`${cookieName}=`));
   return found?.split(';')[0]?.split('=')[1] ?? '';
+}
+
+export function hashIdentifier(value: string) {
+  return crypto.createHash('sha256').update(value.trim().toLowerCase()).digest('hex').slice(0, 12);
 }
 
 export function requestMeta(req: express.Request, extra: Record<string, unknown> = {}) {
@@ -222,6 +281,22 @@ function signToken(
     { sub: String(user.id), role: user.role, type: 'access', ver: user.sessionVersion },
     jwtSecret,
   );
+}
+
+function isAllowedOrigin(origin: string, req: express.Request, allowedOrigins: string[]) {
+  if (allowedOrigins.includes(origin)) return true;
+  try {
+    return new URL(origin).host === req.get('host');
+  } catch {
+    return false;
+  }
+}
+
+function timingSafeEqualString(left: string, right: string) {
+  const leftBuffer = Buffer.from(left, 'utf8');
+  const rightBuffer = Buffer.from(right, 'utf8');
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function serializeCookie(

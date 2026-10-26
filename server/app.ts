@@ -13,7 +13,15 @@ import {
   reviseAiDraft,
   saveAiSettings,
 } from './ai.js';
-import { createResetToken, hashPassword, hashResetToken, verifyPassword } from './auth.js';
+import {
+  assertStrongJwtSecret,
+  createResetToken,
+  hashPassword,
+  hashPasswordAsync,
+  hashResetToken,
+  needsRehash,
+  verifyPasswordAsync,
+} from './auth.js';
 import { HttpError } from './errors.js';
 import {
   createEvent,
@@ -35,6 +43,7 @@ import {
   clearAuthCookies,
   createAuthMiddleware,
   createRateLimiter,
+  hashIdentifier,
   logError,
   logInfo,
   logWarn,
@@ -76,6 +85,7 @@ import {
   getUserRowById,
   getUserSession,
   listUsers,
+  rotateLegacyDefaultAdmin,
   sanitizeUser,
   updateUserDetails,
 } from './users.js';
@@ -95,13 +105,18 @@ export interface AppOptions {
   logRequests?: boolean;
   openRouterBaseUrl?: string;
   fetchImpl?: typeof fetch;
+  onPasswordResetToken?: (payload: { userId: number; email: string; token: string; expiresAt: string }) => void;
 }
 
 const APP_VERSION = process.env.APP_VERSION ?? '0.1.0';
 const PASSWORD_RESET_TTL_MINUTES = 30;
 const LOGIN_ATTEMPT_LIMIT = 8;
+const LOGIN_IP_LIMIT = 40;
+const REGISTER_IP_LIMIT = 20;
 const RESET_ATTEMPT_LIMIT = 5;
+const RESET_IP_LIMIT = 20;
 const AI_REQUEST_LIMIT = 30;
+const AI_IP_LIMIT = 60;
 const DUMMY_PASSWORD_HASH = hashPassword('chronicle-timing-equalizer');
 
 export function createApp(options: AppOptions = {}) {
@@ -113,6 +128,22 @@ export function createApp(options: AppOptions = {}) {
   const backupDir = options.backupDir ?? path.join(dbDir, 'backups');
   fs.mkdirSync(dbDir, { recursive: true });
 
+  const envSecret = options.jwtSecret ?? process.env.JWT_SECRET;
+  const jwtSecret = envSecret || readOrCreateJwtSecret(path.join(dbDir, '.jwt-secret'));
+  assertStrongJwtSecret(jwtSecret);
+  const usingGeneratedSecret = !envSecret;
+  const configuredAdminPassword = options.adminPassword ?? process.env.ADMIN_PASSWORD;
+  const secureCookies = options.secureCookies ?? process.env.NODE_ENV === 'production';
+  const allowRegistration = options.allowRegistration ?? process.env.ALLOW_REGISTRATION === 'true';
+  const corsOrigins = options.corsOrigins ?? parseList(process.env.CORS_ORIGINS);
+  const trustProxy = options.trustProxy ?? parseTrustProxy(process.env.TRUST_PROXY);
+  const logRequests = options.logRequests ?? process.env.LOG_REQUESTS === 'true';
+  const openRouterBaseUrl = (options.openRouterBaseUrl ?? process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const onPasswordResetToken = options.onPasswordResetToken ?? (() => {});
+  const aiModelCache = createAiModelCache();
+  const authLimiter = createRateLimiter();
+
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
@@ -120,27 +151,6 @@ export function createApp(options: AppOptions = {}) {
 
   const migration = runMigrations(db, { dbPath, backupDir, log: logInfo });
   const schemaVersion = getSchemaVersion(db);
-
-  const envSecret = options.jwtSecret ?? process.env.JWT_SECRET;
-  const configuredAdminPassword = options.adminPassword ?? process.env.ADMIN_PASSWORD;
-  if (process.env.NODE_ENV === 'production' && activeUserCount(db) === 0 && !configuredAdminPassword) {
-    db.close();
-    throw new Error(
-      'ADMIN_PASSWORD muss beim ersten Start in Production gesetzt sein. Der bekannte Standard-Admin wird dort nicht verwendet.',
-    );
-  }
-  const jwtSecret = envSecret || readOrCreateJwtSecret(path.join(dbDir, '.jwt-secret'));
-  const usingGeneratedSecret = !envSecret;
-  const secureCookies = options.secureCookies ?? process.env.NODE_ENV === 'production';
-  const allowRegistration = options.allowRegistration ?? process.env.ALLOW_REGISTRATION !== 'false';
-  const exposeResetToken = process.env.NODE_ENV !== 'production' || process.env.PASSWORD_RESET_DEBUG === 'true';
-  const corsOrigins = options.corsOrigins ?? parseList(process.env.CORS_ORIGINS);
-  const trustProxy = options.trustProxy ?? parseTrustProxy(process.env.TRUST_PROXY);
-  const logRequests = options.logRequests ?? process.env.LOG_REQUESTS === 'true';
-  const openRouterBaseUrl = (options.openRouterBaseUrl ?? process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
-  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-  const aiModelCache = createAiModelCache();
-  const authLimiter = createRateLimiter();
 
   app.disable('x-powered-by');
   if (trustProxy !== undefined) app.set('trust proxy', trustProxy);
@@ -151,9 +161,10 @@ export function createApp(options: AppOptions = {}) {
     allowedHeaders: ['Content-Type', 'x-csrf-token'],
     exposedHeaders: ['X-Request-Id'],
   }));
-  app.use(express.json({ limit: '5mb' }));
   app.use(securityHeaders(secureCookies));
   app.use(requestContext);
+  app.use('/api/auth', express.json({ limit: '16kb' }));
+  app.use(express.json({ limit: '5mb' }));
 
   if (logRequests) {
     app.use((req, res, next) => {
@@ -172,6 +183,28 @@ export function createApp(options: AppOptions = {}) {
     });
   }
 
+  try {
+    bootstrapAdmin(db, {
+      email: options.adminEmail ?? process.env.ADMIN_EMAIL,
+      password: configuredAdminPassword,
+      name: options.adminName ?? process.env.ADMIN_NAME,
+      color: options.adminColor ?? process.env.ADMIN_COLOR,
+    });
+    const rotated = rotateLegacyDefaultAdmin(db, { password: configuredAdminPassword });
+    if (rotated.rotated > 0) {
+      logWarn('startup.default_admin_rotated', { count: rotated.rotated });
+    }
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+
+  if (trustProxy === true) {
+    logWarn('startup.trust_proxy_all', {
+      message: 'TRUST_PROXY=true vertraut allen Proxy-Hops und kann IP-basierte Rate-Limits aushebeln. Setze stattdessen einen Hop-Zähler.',
+    });
+  }
+
   logInfo('startup.database_ready', {
     dbPath,
     schemaVersion,
@@ -181,13 +214,6 @@ export function createApp(options: AppOptions = {}) {
     allowRegistration,
     jwtSecretSource: usingGeneratedSecret ? 'persisted-local-file' : 'environment',
     frontendBundled: fs.existsSync(clientIndexPath),
-  });
-
-  bootstrapAdmin(db, {
-    email: options.adminEmail ?? process.env.ADMIN_EMAIL,
-    password: configuredAdminPassword,
-    name: options.adminName ?? process.env.ADMIN_NAME,
-    color: options.adminColor ?? process.env.ADMIN_COLOR,
   });
 
   app.get('/api/health', (_req, res) => {
@@ -216,34 +242,44 @@ export function createApp(options: AppOptions = {}) {
 
   app.use(createAuthMiddleware(db, jwtSecret));
 
-  app.post('/api/auth/register', authLimiter('register', LOGIN_ATTEMPT_LIMIT), (req, res) => {
+  app.post('/api/auth/register', authLimiter('register', LOGIN_ATTEMPT_LIMIT, REGISTER_IP_LIMIT), async (req, res) => {
     if (!allowRegistration) {
       logWarn('auth.register_blocked', requestMeta(req, { reason: 'registration_disabled' }));
       return res.status(403).json({ message: 'Registrierung ist deaktiviert.' });
     }
     const payload = registerSchema.parse(req.body);
-    ensureUniqueEmail(db, payload.email);
+    if (getUserRowByEmail(db, payload.email)) {
+      // Keep the response time close to a successful registration so the
+      // endpoint does not become an account-existence oracle.
+      await hashPasswordAsync(payload.password);
+      throw new HttpError(400, 'Registrierung konnte nicht abgeschlossen werden.');
+    }
 
     const role = activeUserCount(db) === 0 ? 'admin' : 'user';
-    const created = createUser(db, { ...payload, role });
+    const created = await createUser(db, { ...payload, role });
     const session = getUserSession(db, created.id)!;
-    logInfo('auth.register_success', requestMeta(req, { userId: created.id, email: created.email, role: created.role }));
+    logInfo('auth.register_success', requestMeta(req, { userId: created.id, role: created.role }));
     const csrfToken = attachAuthCookies(res, { id: created.id, role: created.role, sessionVersion: session.sessionVersion }, jwtSecret, secureCookies);
     res.status(201).json({ user: created, csrfToken });
   });
 
-  app.post('/api/auth/login', authLimiter('login', LOGIN_ATTEMPT_LIMIT), (req, res) => {
+  app.post('/api/auth/login', authLimiter('login', LOGIN_ATTEMPT_LIMIT, LOGIN_IP_LIMIT), async (req, res) => {
     const payload = loginSchema.parse(req.body);
     const row = getUserRowByEmail(db, payload.email);
     const hash = row?.passwordHash ?? DUMMY_PASSWORD_HASH;
-    const validPassword = verifyPassword(payload.password, hash) && Boolean(row?.passwordHash);
+    const validPassword = await verifyPasswordAsync(payload.password, hash) && Boolean(row?.passwordHash);
     if (!row || !validPassword) {
-      logWarn('auth.login_failed', requestMeta(req, { email: payload.email, reason: 'invalid_credentials' }));
+      logWarn('auth.login_failed', requestMeta(req, { emailHash: hashIdentifier(payload.email), reason: 'invalid_credentials' }));
       return res.status(401).json({ message: 'E-Mail oder Passwort falsch.' });
     }
 
+    if (row.passwordHash && needsRehash(row.passwordHash)) {
+      const passwordHash = await hashPasswordAsync(payload.password);
+      db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(passwordHash, row.id);
+    }
+
     const user = sanitizeUser(row);
-    logInfo('auth.login_success', requestMeta(req, { userId: user.id, email: user.email, role: user.role }));
+    logInfo('auth.login_success', requestMeta(req, { userId: user.id, role: user.role }));
     const csrfToken = attachAuthCookies(
       res,
       { id: row.id, role: row.role, sessionVersion: Number(row.sessionVersion ?? 0) },
@@ -253,40 +289,36 @@ export function createApp(options: AppOptions = {}) {
     res.json({ user, csrfToken });
   });
 
-  app.post('/api/auth/logout', (req, res) => {
-    logInfo('auth.logout', requestMeta(req, { userId: req.auth?.id ?? null }));
-    clearAuthCookies(res, secureCookies);
-    res.json({ ok: true });
-  });
-
-  app.post('/api/auth/password-reset/request', authLimiter('password-reset-request', RESET_ATTEMPT_LIMIT), (req, res) => {
+  app.post('/api/auth/password-reset/request', authLimiter('password-reset-request', RESET_ATTEMPT_LIMIT, RESET_IP_LIMIT), (req, res) => {
     const payload = passwordResetRequestSchema.parse(req.body);
     const row = getUserRowByEmail(db, payload.email);
+    const rawToken = createResetToken();
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000).toISOString();
 
     if (row?.passwordHash) {
       db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?').run(row.id);
-      const rawToken = createResetToken();
-      const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000).toISOString();
       db.prepare(`
         INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
         VALUES (?, ?, ?)
       `).run(row.id, hashResetToken(rawToken), expiresAt);
 
-      logInfo('auth.password_reset_requested', requestMeta(req, { userId: row.id, email: payload.email }));
-
-      return res.json({
-        ok: true,
-        message: 'Falls ein passender Account existiert, wurde ein Reset gestartet.',
-        ...(exposeResetToken ? { resetToken: rawToken, expiresAt } : {}),
-      });
+      logInfo('auth.password_reset_requested', requestMeta(req, { userId: row.id }));
+      try {
+        onPasswordResetToken({ userId: row.id, email: row.email, token: rawToken, expiresAt });
+      } catch (error) {
+        logError('auth.password_reset_delivery_failed', {
+          userId: row.id,
+          errorType: error instanceof Error ? error.name : typeof error,
+        });
+      }
+    } else {
+      logWarn('auth.password_reset_requested_unknown_email', requestMeta(req, { emailHash: hashIdentifier(payload.email) }));
     }
-
-    logWarn('auth.password_reset_requested_unknown_email', requestMeta(req, { email: payload.email }));
 
     return res.json({ ok: true, message: 'Falls ein passender Account existiert, wurde ein Reset gestartet.' });
   });
 
-  app.post('/api/auth/password-reset/confirm', authLimiter('password-reset-confirm', RESET_ATTEMPT_LIMIT), (req, res) => {
+  app.post('/api/auth/password-reset/confirm', authLimiter('password-reset-confirm', RESET_ATTEMPT_LIMIT, RESET_IP_LIMIT), async (req, res) => {
     const payload = passwordResetConfirmSchema.parse(req.body);
     const tokenRow = db.prepare(`
       SELECT id, user_id as userId, expires_at as expiresAt, used_at as usedAt
@@ -307,7 +339,7 @@ export function createApp(options: AppOptions = {}) {
           session_version = session_version + 1,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(hashPassword(payload.password), tokenRow.userId);
+    `).run(await hashPasswordAsync(payload.password), tokenRow.userId);
     db.prepare('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ?').run(tokenRow.id);
     db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ? AND id != ?').run(tokenRow.userId, tokenRow.id);
     db.prepare('DELETE FROM password_reset_tokens WHERE expires_at < ?').run(new Date().toISOString());
@@ -320,7 +352,18 @@ export function createApp(options: AppOptions = {}) {
     res.json({ user: req.auth });
   });
 
-  app.use('/api', requireCsrfForWrites);
+  app.use('/api', requireCsrfForWrites(jwtSecret, corsOrigins));
+
+  app.post('/api/auth/logout', requireAuth, (req, res) => {
+    db.prepare(`
+      UPDATE users
+      SET session_version = session_version + 1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(req.auth!.id);
+    logInfo('auth.logout', requestMeta(req, { userId: req.auth!.id }));
+    clearAuthCookies(res, secureCookies);
+    res.json({ ok: true });
+  });
 
   app.get('/api/events', requireAuth, (req, res) => {
     const query = eventQuerySchema.parse(req.query);
@@ -353,7 +396,7 @@ export function createApp(options: AppOptions = {}) {
   app.post('/api/events', requireAuth, (req, res) => {
     const payload = eventInputSchema.parse(req.body);
     const event = createEvent(db, req.auth!.id, payload);
-    logInfo('events.created', requestMeta(req, { userId: req.auth!.id, eventId: event.id, title: event.title }));
+    logInfo('events.created', requestMeta(req, { userId: req.auth!.id, eventId: event.id }));
     res.status(201).json(event);
   });
 
@@ -361,7 +404,7 @@ export function createApp(options: AppOptions = {}) {
     const eventId = parseId(req.params.id);
     const payload = eventInputSchema.parse(req.body);
     const event = updateEvent(db, eventId, req.auth!.id, payload);
-    logInfo('events.updated', requestMeta(req, { userId: req.auth!.id, eventId, title: payload.title }));
+    logInfo('events.updated', requestMeta(req, { userId: req.auth!.id, eventId }));
     res.json(event);
   });
 
@@ -421,7 +464,7 @@ export function createApp(options: AppOptions = {}) {
     res.json(result);
   });
 
-  app.get('/api/ai/models', requireAuth, authLimiter('ai-models', AI_REQUEST_LIMIT), async (req, res) => {
+  app.get('/api/ai/models', requireAuth, authLimiter('ai-models', AI_REQUEST_LIMIT, AI_IP_LIMIT), async (req, res) => {
     const result = await aiModelCache.load(() => listAiModels({
       db,
       userId: req.auth!.id,
@@ -432,7 +475,7 @@ export function createApp(options: AppOptions = {}) {
     res.json(result);
   });
 
-  app.post('/api/ai/draft', requireAuth, authLimiter('ai-draft', AI_REQUEST_LIMIT), async (req, res) => {
+  app.post('/api/ai/draft', requireAuth, authLimiter('ai-draft', AI_REQUEST_LIMIT, AI_IP_LIMIT), async (req, res) => {
     const payload = aiGenerateSchema.parse(req.body);
     const categories = getFacets(db, req.auth!.id).categories.map((item) => item.name);
     const result = await generateAiDraft({
@@ -447,13 +490,11 @@ export function createApp(options: AppOptions = {}) {
     logInfo('ai.draft_created', requestMeta(req, {
       userId: req.auth!.id,
       model: result.model,
-      title: result.draft.title,
-      startYear: result.draft.startDate.year,
     }));
     res.json(result);
   });
 
-  app.post('/api/ai/revise', requireAuth, authLimiter('ai-revise', AI_REQUEST_LIMIT), async (req, res) => {
+  app.post('/api/ai/revise', requireAuth, authLimiter('ai-revise', AI_REQUEST_LIMIT, AI_IP_LIMIT), async (req, res) => {
     const payload = aiReviseSchema.parse(req.body);
     const categories = getFacets(db, req.auth!.id).categories.map((item) => item.name);
     const result = await reviseAiDraft({
@@ -469,7 +510,6 @@ export function createApp(options: AppOptions = {}) {
     logInfo('ai.draft_revised', requestMeta(req, {
       userId: req.auth!.id,
       model: result.model,
-      title: result.draft.title,
     }));
     res.json(result);
   });
@@ -493,22 +533,24 @@ export function createApp(options: AppOptions = {}) {
     res.json({ user: req.auth });
   });
 
-  app.patch('/api/account', requireAuth, (req, res) => {
+  app.patch('/api/account', requireAuth, async (req, res) => {
     const payload = updateAccountSchema.parse(req.body);
     const row = getUserRowById(db, req.auth!.id);
     if (!row) return res.status(404).json({ message: 'Benutzer nicht gefunden.' });
 
+    let passwordHash: string | null = null;
     if (payload.newPassword) {
-      if (!row.passwordHash || !payload.currentPassword || !verifyPassword(payload.currentPassword, row.passwordHash)) {
+      if (!row.passwordHash || !payload.currentPassword || !(await verifyPasswordAsync(payload.currentPassword, row.passwordHash))) {
         return res.status(400).json({ message: 'Aktuelles Passwort ist falsch.' });
       }
+      passwordHash = await hashPasswordAsync(payload.newPassword);
     }
 
     const passwordChanged = Boolean(payload.newPassword);
     updateUserDetails(db, req.auth!.id, {
       name: payload.name,
       color: payload.color,
-      passwordHash: payload.newPassword ? hashPassword(payload.newPassword) : null,
+      passwordHash,
       bumpSession: passwordChanged,
     });
 
@@ -529,10 +571,10 @@ export function createApp(options: AppOptions = {}) {
     return res.json({ user: updated });
   });
 
-  app.delete('/api/account', requireAuth, (req, res) => {
+  app.delete('/api/account', requireAuth, async (req, res) => {
     const payload = deleteAccountSchema.parse(req.body);
     const row = getUserRowById(db, req.auth!.id);
-    if (!row?.passwordHash || !verifyPassword(payload.password, row.passwordHash)) {
+    if (!row?.passwordHash || !(await verifyPasswordAsync(payload.password, row.passwordHash))) {
       logWarn('account.delete_failed', requestMeta(req, { userId: req.auth!.id, reason: 'invalid_password' }));
       return res.status(400).json({ message: 'Passwort ist falsch.' });
     }
@@ -543,7 +585,7 @@ export function createApp(options: AppOptions = {}) {
     }
 
     deleteUser(db, req.auth!.id);
-    logInfo('account.deleted', requestMeta(req, { userId: req.auth!.id, email: row.email }));
+    logInfo('account.deleted', requestMeta(req, { userId: req.auth!.id }));
     clearAuthCookies(res, secureCookies);
     res.json({ ok: true });
   });
@@ -552,15 +594,15 @@ export function createApp(options: AppOptions = {}) {
     res.json({ users: listUsers(db) });
   });
 
-  app.post('/api/admin/users', requireAdmin, (req, res) => {
+  app.post('/api/admin/users', requireAdmin, async (req, res) => {
     const payload = createUserSchema.parse(req.body);
     ensureUniqueEmail(db, payload.email);
-    const user = createUser(db, payload);
-    logInfo('admin.user_created', requestMeta(req, { actorUserId: req.auth!.id, userId: user.id, email: user.email, role: user.role }));
+    const user = await createUser(db, payload);
+    logInfo('admin.user_created', requestMeta(req, { actorUserId: req.auth!.id, userId: user.id, role: user.role }));
     res.status(201).json({ user });
   });
 
-  app.patch('/api/admin/users/:id', requireAdmin, (req, res) => {
+  app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
     const payload = adminUpdateUserSchema.parse(req.body);
     const userId = parseId(req.params.id);
     const row = getUserRowById(db, userId);
@@ -571,11 +613,12 @@ export function createApp(options: AppOptions = {}) {
 
     const roleChanged = Boolean(payload.role && payload.role !== row.role);
     const passwordChanged = Boolean(payload.password);
+    const passwordHash = payload.password ? await hashPasswordAsync(payload.password) : null;
     updateUserDetails(db, userId, {
       name: payload.name,
       color: payload.color,
       role: payload.role,
-      passwordHash: payload.password ? hashPassword(payload.password) : null,
+      passwordHash,
       bumpSession: roleChanged || passwordChanged,
     });
 
@@ -600,7 +643,7 @@ export function createApp(options: AppOptions = {}) {
     const target = backupDatabase(db, dbPath, backupDir, 'admin-download');
     if (!target) throw new HttpError(400, 'Backup ist für diese Datenbank nicht verfügbar.');
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    logInfo('admin.backup_downloaded', requestMeta(_req, { target }));
+    logInfo('admin.backup_downloaded', requestMeta(_req, { file: path.basename(target) }));
     res.download(target, `chronicle-backup-${stamp}.sqlite`);
   });
 
@@ -644,6 +687,16 @@ export function createApp(options: AppOptions = {}) {
 
     if (error instanceof SyntaxError && 'body' in error) {
       return res.status(400).json({ message: 'Ungültiges JSON.', requestId: req.requestId });
+    }
+
+    if (error && typeof error === 'object' && 'status' in error) {
+      const status = (error as { status?: unknown }).status;
+      if (status === 413) {
+        return res.status(413).json({ message: 'Anfrage ist zu groß.', requestId: req.requestId });
+      }
+      if (typeof status === 'number' && status >= 400 && status < 500) {
+        return res.status(status).json({ message: 'Ungültige Anfrage.', requestId: req.requestId });
+      }
     }
 
     const message = error instanceof Error ? error.message : 'Unbekannter Fehler.';

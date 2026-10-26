@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,18 +9,21 @@ import Database from 'better-sqlite3';
 import { hashPassword, verifyPassword } from '../server/auth.js';
 import { createApp } from '../server/app.js';
 
-function makeFixture() {
+const TEST_JWT_SECRET = '0123456789abcdef'.repeat(4);
+
+function makeFixture(extra: Parameters<typeof createApp>[0] = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lifeline-test-'));
   const dbPath = path.join(dir, 'lifeline.sqlite');
   const fixture = createApp({
     dbPath,
-    jwtSecret: 'test-secret',
+    jwtSecret: TEST_JWT_SECRET,
     adminEmail: 'admin@example.com',
     adminPassword: 'AdminPassword123!',
     adminName: 'Admin',
     adminColor: '#7c3aed',
     allowRegistration: true,
     secureCookies: false,
+    ...extra,
   });
   return {
     ...fixture,
@@ -56,8 +60,8 @@ test('public auth config exposes whether registration is allowed', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lifeline-config-'));
   const fixture = createApp({
     dbPath: path.join(dir, 'lifeline.sqlite'),
-    jwtSecret: 'test-secret',
-    allowRegistration: false,
+    jwtSecret: TEST_JWT_SECRET,
+    adminPassword: 'AdminPassword123!',
     secureCookies: false,
   });
 
@@ -234,7 +238,7 @@ test('legacy schema is migrated and existing user becomes bootstrap admin', asyn
     .run(userId, 'Altes Ereignis', '', 'Alt', JSON.stringify({ precision: 'year', year: 2020, month: null, day: null }), null, 0, '2020-01-01', '2020-12-31');
   legacyDb.close();
 
-  const fixture = createApp({ dbPath, jwtSecret: 'test-secret', adminEmail: 'legacy@example.com', adminPassword: 'LegacyPassword123!', secureCookies: false });
+  const fixture = createApp({ dbPath, jwtSecret: TEST_JWT_SECRET, adminEmail: 'legacy@example.com', adminPassword: 'LegacyPassword123!', secureCookies: false });
   try {
     const agent = request.agent(fixture.app);
     const login = await agent.post('/api/auth/login').send({ email: 'legacy@example.com', password: 'LegacyPassword123!' });
@@ -287,8 +291,9 @@ test('comma-separated categories are normalized as separate categories', async (
   }
 });
 
-test('password verification rejects malformed hashes and accepts valid ones', () => {
+test('password verification rejects malformed hashes and uses the current scrypt cost', () => {
   const hashed = hashPassword('VerySecurePass123!');
+  assert.match(hashed, /^scrypt\$131072\$/);
   assert.equal(verifyPassword('VerySecurePass123!', hashed), true);
   assert.equal(verifyPassword('VerySecurePass123!', 'broken-hash-format'), false);
 });
@@ -312,8 +317,63 @@ test('account deletion requires password and removes session access', async () =
   }
 });
 
-test('password reset flow issues a token and accepts the new password', async () => {
+test('secure mode uses __Host- cookie names with Secure and HttpOnly flags', async () => {
+  const fixture = makeFixture({ secureCookies: true });
+  try {
+    const response = await request(fixture.app)
+      .post('/api/auth/register')
+      .send({
+        name: 'Secure Cookie',
+        color: '#0ea5e9',
+        email: 'secure-cookie@example.com',
+        password: 'VerySecurePass123!',
+      });
+    assert.equal(response.status, 201);
+    const cookies = ([] as string[]).concat(response.headers['set-cookie'] ?? []);
+    const authCookie = cookies.find((cookie) => cookie.startsWith('__Host-lifeline_auth='));
+    const csrfCookie = cookies.find((cookie) => cookie.startsWith('__Host-lifeline_csrf='));
+    assert.ok(authCookie);
+    assert.ok(csrfCookie);
+    assert.match(authCookie, /; Secure/);
+    assert.match(authCookie, /; HttpOnly/);
+    assert.doesNotMatch(csrfCookie, /; HttpOnly/);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('successful login rehashes legacy scrypt hashes with the current cost', async () => {
   const fixture = makeFixture();
+  try {
+    const agent = request.agent(fixture.app);
+    await register(agent, { email: 'legacy-hash@example.com' });
+
+    const salt = crypto.randomBytes(16).toString('hex');
+    const derived = crypto.scryptSync('VerySecurePass123!', salt, 64, { N: 16384, r: 8, p: 1 }).toString('hex');
+    const legacyHash = ['scrypt', 16384, 8, 1, salt, derived].join('$');
+    fixture.db.prepare('UPDATE users SET password_hash = ? WHERE email = ?')
+      .run(legacyHash, 'legacy-hash@example.com');
+
+    const login = await request(fixture.app)
+      .post('/api/auth/login')
+      .send({ email: 'legacy-hash@example.com', password: 'VerySecurePass123!' });
+    assert.equal(login.status, 200);
+
+    const stored = fixture.db.prepare('SELECT password_hash as passwordHash FROM users WHERE email = ?')
+      .get('legacy-hash@example.com') as { passwordHash: string };
+    assert.match(stored.passwordHash, /^scrypt\$131072\$/);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('password reset delivers the token out-of-band and never returns it over HTTP', async () => {
+  let resetToken = '';
+  const fixture = makeFixture({
+    onPasswordResetToken: (payload) => {
+      resetToken = payload.token;
+    },
+  });
   try {
     const agent = request.agent(fixture.app);
     await register(agent, { email: 'reset-me@example.com', name: 'Reset Me' });
@@ -322,11 +382,13 @@ test('password reset flow issues a token and accepts the new password', async ()
       .post('/api/auth/password-reset/request')
       .send({ email: 'reset-me@example.com' });
     assert.equal(requestReset.status, 200);
-    assert.equal(typeof requestReset.body.resetToken, 'string');
+    assert.equal(requestReset.body.resetToken, undefined);
+    assert.equal(requestReset.body.expiresAt, undefined);
+    assert.ok(resetToken.length >= 32);
 
     const confirm = await request(fixture.app)
       .post('/api/auth/password-reset/confirm')
-      .send({ token: requestReset.body.resetToken, password: 'BrandNewSecure123!' });
+      .send({ token: resetToken, password: 'BrandNewSecure123!' });
     assert.equal(confirm.status, 200);
 
     const relogin = await request(fixture.app)
@@ -352,6 +414,173 @@ test('login rate limiting blocks repeated bad attempts', async () => {
       .post('/api/auth/login')
       .send({ email: 'admin@example.com', password: 'definitely-wrong-password' });
     assert.equal(blocked.status, 429);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('login rate limiting also caps attempts per IP when emails rotate', async () => {
+  const fixture = makeFixture();
+  try {
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const response = await request(fixture.app)
+        .post('/api/auth/login')
+        .send({ email: `not-an-email-${attempt}`, password: 'definitely-wrong-password' });
+      assert.equal(response.status, 400);
+    }
+
+    const blocked = await request(fixture.app)
+      .post('/api/auth/login')
+      .send({ email: 'another-rotated-address', password: 'definitely-wrong-password' });
+    assert.equal(blocked.status, 429);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('CSRF tokens are signed and bound to the authenticated session', async () => {
+  const fixture = makeFixture();
+  try {
+    const alice = request.agent(fixture.app);
+    const bob = request.agent(fixture.app);
+    const aliceAuth = await register(alice, { email: 'csrf-alice@example.com' });
+    const bobAuth = await register(bob, { email: 'csrf-bob@example.com', name: 'Bob' });
+
+    const crossUser = await bob
+      .post('/api/events')
+      .set('x-csrf-token', aliceAuth.csrfToken)
+      .send({});
+    assert.equal(crossUser.status, 403);
+
+    const tampered = `${bobAuth.csrfToken.slice(0, -1)}${bobAuth.csrfToken.endsWith('a') ? 'b' : 'a'}`;
+    const invalid = await bob
+      .post('/api/events')
+      .set('x-csrf-token', tampered)
+      .send({});
+    assert.equal(invalid.status, 403);
+
+    const crossOrigin = await bob
+      .post('/api/events')
+      .set('x-csrf-token', bobAuth.csrfToken)
+      .set('Origin', 'https://evil.example')
+      .send({});
+    assert.equal(crossOrigin.status, 403);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('known default admin passwords are rejected and legacy defaults are rotated', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lifeline-default-admin-'));
+  const dbPath = path.join(dir, 'lifeline.sqlite');
+  try {
+    assert.throws(
+      () => createApp({ dbPath, jwtSecret: TEST_JWT_SECRET, secureCookies: false }),
+      /ADMIN_PASSWORD/,
+    );
+    assert.throws(
+      () => createApp({
+        dbPath,
+        jwtSecret: TEST_JWT_SECRET,
+        adminEmail: 'admin@example.com',
+        adminPassword: 'ChangeMe123!',
+        secureCookies: false,
+      }),
+      /ADMIN_PASSWORD/,
+    );
+
+    const first = createApp({
+      dbPath,
+      jwtSecret: TEST_JWT_SECRET,
+      adminEmail: 'admin@example.com',
+      adminPassword: 'AdminPassword123!',
+      secureCookies: false,
+    });
+    first.db.prepare('UPDATE users SET password_hash = ? WHERE email = ?')
+      .run(hashPassword('ChangeMe123!'), 'admin@example.com');
+    first.db.close();
+
+    assert.throws(
+      () => createApp({ dbPath, jwtSecret: TEST_JWT_SECRET, secureCookies: false }),
+      /ADMIN_PASSWORD/,
+    );
+
+    const rotated = createApp({
+      dbPath,
+      jwtSecret: TEST_JWT_SECRET,
+      adminPassword: 'RotatedPassword123!',
+      secureCookies: false,
+    });
+    try {
+      const oldLogin = await request(rotated.app)
+        .post('/api/auth/login')
+        .send({ email: 'admin@example.com', password: 'ChangeMe123!' });
+      assert.equal(oldLogin.status, 401);
+
+      const newLogin = await request(rotated.app)
+        .post('/api/auth/login')
+        .send({ email: 'admin@example.com', password: 'RotatedPassword123!' });
+      assert.equal(newLogin.status, 200);
+    } finally {
+      rotated.db.close();
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('weak or placeholder JWT secrets are rejected at startup', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lifeline-jwt-secret-'));
+  const dbPath = path.join(dir, 'lifeline.sqlite');
+  try {
+    assert.throws(
+      () => createApp({ dbPath, jwtSecret: 'change-me', adminPassword: 'AdminPassword123!', secureCookies: false }),
+      /JWT_SECRET/,
+    );
+    assert.throws(
+      () => createApp({ dbPath, jwtSecret: 'short', adminPassword: 'AdminPassword123!', secureCookies: false }),
+      /JWT_SECRET/,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('oversized emails and auth request bodies are rejected', async () => {
+  const fixture = makeFixture();
+  try {
+    const longEmail = await request(fixture.app)
+      .post('/api/auth/login')
+      .send({ email: `${'a'.repeat(250)}@example.com`, password: 'definitely-wrong-password' });
+    assert.equal(longEmail.status, 400);
+
+    const oversizedBody = await request(fixture.app)
+      .post('/api/auth/login')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ email: 'admin@example.com', password: 'x'.repeat(20 * 1024) }));
+    assert.equal(oversizedBody.status, 413);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('duplicate registration does not reveal whether an account exists', async () => {
+  const fixture = makeFixture();
+  try {
+    const agent = request.agent(fixture.app);
+    await register(agent, { email: 'duplicate@example.com' });
+
+    const duplicate = await request(fixture.app)
+      .post('/api/auth/register')
+      .send({
+        name: 'Duplicate',
+        color: '#ef4444',
+        email: 'duplicate@example.com',
+        password: 'AnotherSecurePass123!',
+      });
+    assert.equal(duplicate.status, 400);
+    assert.equal(duplicate.body.message, 'Registrierung konnte nicht abgeschlossen werden.');
+    assert.doesNotMatch(duplicate.body.message, /bereits|exist/i);
   } finally {
     fixture.cleanup();
   }

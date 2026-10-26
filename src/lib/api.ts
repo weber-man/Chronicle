@@ -46,7 +46,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set('Content-Type', 'application/json');
   }
   if (!['GET', 'HEAD'].includes(method)) {
-    const token = csrfToken || readCookie('lifeline_csrf');
+    const token = csrfToken || readCookie('__Host-lifeline_csrf') || readCookie('lifeline_csrf');
     if (token) {
       csrfToken = token;
       headers.set('x-csrf-token', token);
@@ -138,7 +138,7 @@ export const api = {
   me: () => request<{ user: User }>('/auth/me'),
   login: (payload: { email: string; password: string }) => request<{ user: User; csrfToken: string }>('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   register: (payload: { name: string; color: string; email: string; password: string }) => request<{ user: User; csrfToken: string }>('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
-  requestPasswordReset: (payload: { email: string }) => request<{ ok: true; message: string; resetToken?: string; expiresAt?: string }>('/auth/password-reset/request', { method: 'POST', body: JSON.stringify(payload) }),
+  requestPasswordReset: (payload: { email: string }) => request<{ ok: true; message: string }>('/auth/password-reset/request', { method: 'POST', body: JSON.stringify(payload) }),
   confirmPasswordReset: (payload: { token: string; password: string }) => request<{ ok: true; message: string }>('/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify(payload) }),
   logout: () => request<{ ok: true }>('/auth/logout', { method: 'POST' }),
   getEvents: (query: EventQuery = {}) => request<EventListResponse>(`/events${toQueryString(query)}`),

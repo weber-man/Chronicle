@@ -26,7 +26,7 @@
 
       <label v-if="mode === 'reset-confirm'" class="grid gap-2">
         <span class="text-sm text-stone-600">Reset-Token</span>
-        <input v-model="form.resetToken" class="paper-input rounded-2xl px-4 py-3" placeholder="Token aus Mail oder Dev-Ausgabe" autocomplete="off" required />
+        <input v-model="form.resetToken" class="paper-input rounded-2xl px-4 py-3" placeholder="Token aus deiner E-Mail" autocomplete="off" required />
       </label>
 
       <label v-if="mode !== 'reset-request'" class="grid gap-2">
@@ -48,9 +48,6 @@
       </label>
 
       <p v-if="message" class="rounded-2xl border border-emerald-900/15 bg-emerald-100/70 px-4 py-3 text-sm text-emerald-950" role="status" aria-live="polite">{{ message }}</p>
-      <p v-if="debugResetToken" class="break-all rounded-2xl border border-amber-900/15 bg-amber-100/70 px-4 py-3 text-xs text-amber-950">
-        Dev-Reset-Token: <strong>{{ debugResetToken }}</strong>
-      </p>
       <p v-if="error" class="rounded-2xl border border-rose-900/15 bg-rose-100/70 px-4 py-3 text-sm text-rose-950" role="alert" aria-live="assertive">{{ error }}</p>
 
       <button class="ink-button rounded-2xl px-5 py-3 font-medium disabled:opacity-60" :disabled="submitting" type="submit">
@@ -81,7 +78,6 @@ const mode = ref<Mode>('login');
 const submitting = ref(false);
 const error = ref('');
 const message = ref('');
-const debugResetToken = ref('');
 const form = reactive({
   name: '',
   color: '#7c3aed',
@@ -116,7 +112,7 @@ const heading = computed(() => {
 const subline = computed(() => {
   switch (mode.value) {
     case 'reset-request':
-      return 'Wir starten einen sicheren Reset und zeigen lokal auf Wunsch den Token an.';
+      return 'Falls ein Konto existiert, starten wir einen sicheren Reset. Der Token wird nicht im Browser angezeigt.';
     case 'reset-confirm':
       return 'Token einfügen und ein neues starkes Passwort setzen.';
     case 'register':
@@ -192,11 +188,6 @@ async function submit() {
     if (mode.value === 'reset-request') {
       const result = await store.requestPasswordReset({ email: form.email.trim() });
       message.value = result.message;
-      debugResetToken.value = result.resetToken ?? '';
-      if (result.resetToken) {
-        form.resetToken = result.resetToken;
-        mode.value = 'reset-confirm';
-      }
       return;
     }
 

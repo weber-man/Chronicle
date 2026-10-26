@@ -17,6 +17,8 @@ Private Zeitleiste für Lebensereignisse, Erinnerungen und Pläne. Fullstack-App
 ## Start
 
 ```bash
+cp .env.example .env
+# ADMIN_PASSWORD in .env setzen (mindestens 12 Zeichen, kein Standardwert)
 npm install
 npm run dev
 ```
@@ -24,7 +26,7 @@ npm run dev
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:3001`
 
-Die SQLite-Datei liegt standardmäßig unter `data/lifeline.sqlite`.
+Die SQLite-Datei liegt standardmäßig unter `data/lifeline.sqlite`. Der Server lädt `.env` beim Start automatisch. Beim ersten Start ist `ADMIN_PASSWORD` Pflicht; es gibt keinen bekannten Standard-Administrator mehr. Wird eine bestehende Datenbank mit dem alten Standard-Passwort erkannt, ersetzt der Server es beim Start durch `ADMIN_PASSWORD` und invalidiert alle alten Sessions. Ohne gesetztes `ADMIN_PASSWORD` verweigert er den Start.
 
 ## Tests und Build
 
@@ -101,47 +103,49 @@ Alle Ereignis- und Daten-Endpunkte benötigen eine Session. Schreibende Requests
 | --- | --- |
 | `PORT` | HTTP-Port, Standard `3001` |
 | `DB_PATH` | Pfad zur SQLite-Datei, Standard `data/lifeline.sqlite` |
-| `JWT_SECRET` | Signatur-Secret und Basis für die Verschlüsselung der OpenRouter-Keys. Ohne Wert wird ein Secret in `data/.jwt-secret` erzeugt und wiederverwendet |
+| `JWT_SECRET` | Signatur-Secret und Basis für die Verschlüsselung der OpenRouter-Keys. Mindestens 48 Byte; Platzhalter wie `change-me` werden abgelehnt. Ohne Wert wird ein Secret in `data/.jwt-secret` erzeugt und wiederverwendet |
 | `OPENROUTER_BASE_URL` | Optional; Standard `https://openrouter.ai/api/v1` |
 | `OPENROUTER_DEFAULT_MODEL` | Optional; Standardmodell für neue KI-Verbindungen, Standard `openai/gpt-4o-mini` |
 | `OPENROUTER_SITE_URL` | Optional; Wert für den `HTTP-Referer`-Header an OpenRouter, Standard `http://localhost:3001` |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Bootstrap-Administrator beim ersten Start. In Production ist `ADMIN_PASSWORD` bei einer leeren Datenbank Pflicht; der bekannte Entwicklungs-Standard wird dort abgelehnt. |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Bootstrap-Administrator beim ersten Start. `ADMIN_PASSWORD` ist bei einer leeren Datenbank immer Pflicht; bekannte Standardwerte werden abgelehnt. |
 | `ADMIN_NAME`, `ADMIN_COLOR` | Anzeigename und Farbe des Bootstrap-Administrators |
-| `ALLOW_REGISTRATION` | `false` deaktiviert die öffentliche Registrierung |
+| `ALLOW_REGISTRATION` | Öffentliche Registrierung ist standardmäßig deaktiviert; nur `true` aktiviert sie |
 | `CORS_ORIGINS` | Kommagetrennte erlaubte Origins; ohne Wert werden keine Cross-Origin-Requests erlaubt |
-| `TRUST_PROXY` | Express-`trust proxy`-Wert, z. B. `1` oder `loopback` |
+| `TRUST_PROXY` | Express-`trust proxy`-Wert, z. B. `1` oder `loopback`. `true` vertraut allen Hops und schwächt IP-Rate-Limits; nur mit Bedacht verwenden. |
 | `LOG_REQUESTS` | `true` aktiviert strukturierte Request-Logs |
-| `PASSWORD_RESET_DEBUG` | `true` zeigt Reset-Tokens auch in Production (nur für Tests) |
 | `APP_VERSION` | Optionale Versionsanzeige in `/api/health` |
-| `NODE_ENV` | `production` aktiviert sichere Cookies und unterdrückt Debug-Ausgaben |
+| `NODE_ENV` | `production` aktiviert sichere Cookies und `__Host-`-Cookie-Namen |
 
 ## Sicherheit
 
-- HTTP-only JWT-Cookie für Sessions
-- CSRF-Schutz für schreibende Requests
-- Passwort-Hashing via `scrypt`
+- HTTP-only JWT-Cookie für Sessions; in Production mit `__Host-`-Präfix
+- signiertes, an Benutzer und Session-Version gebundenes CSRF-Token plus Origin-Prüfung
+- Passwort-Hashing via `scrypt` mit `N=2^17`; alte Hashes werden bei erfolgreichem Login automatisch rehasht
+- keine Standard-Admin-Zugangsdaten; bekannte Altlasten werden beim Start rotiert oder der Start wird verweigert
 - Rollenmodell mit `admin` und `user`
 - strikte Datentrennung pro Benutzer
-- Rate Limiting auf Login, Registrierung, Passwort-Reset und KI-Aufrufe
+- Rate Limiting pro IP und pro Konto/E-Mail auf Login, Registrierung, Passwort-Reset und KI-Aufrufe
 - OpenRouter-Keys AES-256-GCM-verschlüsselt at rest, nie im Klartext im API-Response
-- Passwort-Reset mit kurzlebigem Token
-- Session-Widerruf über `session_version` nach Passwort-/Rollenänderung
+- Passwort-Reset mit kurzlebigem Token; Tokens werden nie über die API zurückgegeben und bei Passwortänderungen invalidiert
+- Session-Widerruf über `session_version` nach Passwort-/Rollenänderung und beim Logout
 - CSP und weitere Security-Header
-- Fehlerantworten ohne interne Details
+- Fehlerantworten ohne interne Details; Logs enthalten keine E-Mail-Adressen oder Ereignistitel
 
-Für lokales Testen zeigt der Passwort-Reset-Request den Token im Response an. In Production ist das standardmäßig aus und sollte an einen Mail-Flow angebunden werden.
+Passwort-Reset-Tokens werden über den optionalen Server-Hook `onPasswordResetToken` an einen Mail- oder Benachrichtigungsdienst übergeben. Die HTTP-Antwort ist immer identisch, unabhängig davon, ob ein Konto existiert.
 
 ## Docker / Deployment
 
 Das Image baut Frontend und Backend zusammen. Der Container läuft als `node`-Benutzer und besitzt einen Healthcheck gegen `/api/health/ready`.
 
 ```bash
-docker build -f Dockerfile.backend -t chronicles-backend .
+export JWT_SECRET="$(openssl rand -hex 48)"
+export ADMIN_PASSWORD="$(openssl rand -base64 24)" # sicher speichern
+docker build -f Dockerfile -t chronicles-backend .
 docker run --rm -p 3001:3001 \
   -e NODE_ENV=production \
-  -e JWT_SECRET='change-me' \
+  -e JWT_SECRET="$JWT_SECRET" \
   -e ADMIN_EMAIL='admin@example.com' \
-  -e ADMIN_PASSWORD='change-me-too' \
+  -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
   -v chronicles_data:/app/data \
   chronicles-backend
 ```
@@ -160,9 +164,9 @@ services:
       NODE_ENV: production
       PORT: 3001
       DB_PATH: /app/data/lifeline.sqlite
-      JWT_SECRET: change-this-to-a-long-random-secret
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET muss gesetzt sein}"
       ADMIN_EMAIL: admin@example.com
-      ADMIN_PASSWORD: change-this-admin-password
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:?ADMIN_PASSWORD muss gesetzt sein}"
       ADMIN_NAME: Administrator
       ADMIN_COLOR: "#7c3aed"
       ALLOW_REGISTRATION: "false"
@@ -201,4 +205,4 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 3. `npm test`
 4. `npm run build`
 
-Der Docker-Release-Workflow baut bei Tags weiterhin das Image für GitHub Container Registry.
+Der Docker-Release-Workflow baut bei Tags weiterhin das Image für GitHub Container Registry. GitHub Actions und das Docker-Basisimage sind auf feste Commit-/Digest-Werte gepinnt; Dependabot prüft npm-, Action- und Docker-Updates wöchentlich.

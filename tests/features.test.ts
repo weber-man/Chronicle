@@ -9,12 +9,14 @@ import { createAiModelCache } from '../server/ai.js';
 import { createApp } from '../server/app.js';
 import { latestSchemaVersion } from '../server/migrations.js';
 
+const TEST_JWT_SECRET = '0123456789abcdef'.repeat(4);
+
 function makeFixture(extra: Parameters<typeof createApp>[0] = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chronicle-feature-'));
   const dbPath = path.join(dir, 'lifeline.sqlite');
   const fixture = createApp({
     dbPath,
-    jwtSecret: 'test-secret',
+    jwtSecret: TEST_JWT_SECRET,
     adminEmail: 'admin@example.com',
     adminPassword: 'AdminPassword123!',
     adminName: 'Admin',
@@ -460,17 +462,23 @@ test('changing a password revokes old sessions and reissues a working CSRF token
 });
 
 test('password reset revokes previously issued JWTs', async () => {
-  const fixture = makeFixture();
+  let resetToken = '';
+  const fixture = makeFixture({
+    onPasswordResetToken: (payload) => {
+      resetToken = payload.token;
+    },
+  });
   try {
     const agent = request.agent(fixture.app);
     await register(agent);
     const oldAuthCookie = await readAuthCookie(fixture.app, 'alice@example.com', 'VerySecurePass123!');
 
     const resetRequest = await request(fixture.app).post('/api/auth/password-reset/request').send({ email: 'alice@example.com' });
-    assert.equal(typeof resetRequest.body.resetToken, 'string');
+    assert.equal(resetRequest.body.resetToken, undefined);
+    assert.ok(resetToken.length >= 32);
 
     const confirm = await request(fixture.app).post('/api/auth/password-reset/confirm').send({
-      token: resetRequest.body.resetToken,
+      token: resetToken,
       password: 'BrandNewSecure123!',
     });
     assert.equal(confirm.status, 200);
@@ -483,6 +491,67 @@ test('password reset revokes previously issued JWTs', async () => {
       password: 'BrandNewSecure123!',
     });
     assert.equal(newLogin.status, 200);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('changing a password invalidates outstanding password reset tokens', async () => {
+  let resetToken = '';
+  const fixture = makeFixture({
+    onPasswordResetToken: (payload) => {
+      resetToken = payload.token;
+    },
+  });
+  try {
+    const agent = request.agent(fixture.app);
+    const auth = await register(agent);
+
+    const resetRequest = await request(fixture.app)
+      .post('/api/auth/password-reset/request')
+      .send({ email: 'alice@example.com' });
+    assert.equal(resetRequest.status, 200);
+    assert.ok(resetToken.length >= 32);
+
+    const changed = await agent.patch('/api/account').set('x-csrf-token', auth.csrfToken).send({
+      currentPassword: 'VerySecurePass123!',
+      newPassword: 'EvenMoreSecure123!',
+    });
+    assert.equal(changed.status, 200);
+
+    const confirm = await request(fixture.app)
+      .post('/api/auth/password-reset/confirm')
+      .send({ token: resetToken, password: 'BrandNewSecure123!' });
+    assert.equal(confirm.status, 400);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('logout revokes the current JWT server-side', async () => {
+  const fixture = makeFixture();
+  try {
+    const agent = request.agent(fixture.app);
+    const auth = await register(agent);
+    const oldAuthCookie = await readAuthCookie(fixture.app, 'alice@example.com', 'VerySecurePass123!');
+
+    const logout = await agent.post('/api/auth/logout').set('x-csrf-token', auth.csrfToken);
+    assert.equal(logout.status, 200);
+
+    const oldSession = await request(fixture.app).get('/api/events').set('Cookie', oldAuthCookie);
+    assert.equal(oldSession.status, 401);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('event pagination rejects unbounded page numbers', async () => {
+  const fixture = makeFixture();
+  try {
+    const agent = request.agent(fixture.app);
+    await register(agent);
+    const response = await agent.get('/api/events?page=100001');
+    assert.equal(response.status, 400);
   } finally {
     fixture.cleanup();
   }
@@ -520,7 +589,7 @@ test('production refuses to bootstrap an admin with the development default pass
   process.env.NODE_ENV = 'production';
   try {
     assert.throws(
-      () => createApp({ dbPath, jwtSecret: 'test-secret', secureCookies: false }),
+      () => createApp({ dbPath, jwtSecret: TEST_JWT_SECRET, secureCookies: false }),
       /ADMIN_PASSWORD/,
     );
   } finally {
@@ -563,7 +632,7 @@ test('legacy databases are migrated with a backup and reopen without changing da
 
   const first = createApp({
     dbPath,
-    jwtSecret: 'test-secret',
+    jwtSecret: TEST_JWT_SECRET,
     adminEmail: 'legacy@example.com',
     adminPassword: 'LegacyPassword123!',
     secureCookies: false,
@@ -589,7 +658,7 @@ test('legacy databases are migrated with a backup and reopen without changing da
     first.db.close();
   }
 
-  const second = createApp({ dbPath, jwtSecret: 'test-secret', secureCookies: false });
+  const second = createApp({ dbPath, jwtSecret: TEST_JWT_SECRET, secureCookies: false });
   try {
     assert.equal(second.schemaVersion, latestSchemaVersion);
     const backups = fs.readdirSync(path.join(dir, 'backups')).filter((entry) => entry.endsWith('.sqlite'));

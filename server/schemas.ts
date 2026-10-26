@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const emailSchema = z.string().trim().max(254, 'E-Mail ist zu lang.').email('E-Mail ist ungültig.');
+
 export const timelineDateSchema = z.object({
   precision: z.enum(['year', 'month', 'day']),
   year: z.number().int().min(0).max(9999),
@@ -64,7 +66,7 @@ export const eventQuerySchema = z.object({
   category: z.string().trim().max(100).optional(),
   type: z.enum(['all', 'points', 'ranges', 'ongoing']).default('all'),
   sort: eventSortSchema.default('start-asc'),
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(100000).default(1),
   pageSize: z.coerce.number().int().min(1).max(500).default(50),
   trash: z.enum(['true', 'false']).optional().transform((value) => value === 'true'),
 });
@@ -89,14 +91,14 @@ export const importPayloadSchema = z.union([
 }));
 
 export const loginSchema = z.object({
-  email: z.string().trim().email(),
+  email: emailSchema,
   password: z.string().min(8).max(200),
 });
 
 export const registerSchema = z.object({
   name: z.string().trim().min(1).max(60),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  email: z.string().trim().email(),
+  email: emailSchema,
   password: z.string().min(12).max(200),
 });
 
@@ -127,7 +129,7 @@ export const adminUpdateUserSchema = z.object({
 });
 
 export const passwordResetRequestSchema = z.object({
-  email: z.string().trim().email(),
+  email: emailSchema,
 });
 
 export const passwordResetConfirmSchema = z.object({

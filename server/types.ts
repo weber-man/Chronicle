@@ -36,6 +36,7 @@ declare global {
   namespace Express {
     interface Request {
       auth?: SanitizedUser;
+      authSessionVersion?: number;
       requestId?: string;
     }
   }
