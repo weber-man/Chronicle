@@ -8,8 +8,6 @@ export default {
     ariaOpenAccount: 'Account von {name} öffnen',
     openAccountTitle: '{name} · Account & Einstellungen',
     loading: 'Lade …',
-    footerNote: 'Daten bleiben in deiner SQLite-Datei.',
-    footerBackups: 'Automatische Backups vor Migrationen',
     nav: {
       list: 'Liste',
       timeline: 'Timeline',
@@ -522,7 +520,7 @@ export default {
   dataPanel: {
     kicker: 'Datenhoheit',
     heading: 'Export, Import & Backup',
-    subtitle: 'Deine Ereignisse bleiben in deiner SQLite-Datei. Hier kannst du sie zusätzlich sichern oder umziehen.',
+    subtitle: 'Exportiere deine Ereignisse, importiere vorhandene Einträge oder sichere dein Archiv.',
     exportTitle: 'JSON-Export',
     exportText: 'Alle aktiven Ereignisse und der Papierkorb, inklusive Kategorien und Datumsgenauigkeit.',
     exportButton: 'Daten exportieren',
@@ -532,7 +530,7 @@ export default {
     importButton: 'Datei importieren',
     importing: 'Importiere …',
     backupTitle: 'SQLite-Backup (Administrator)',
-    backupText: 'Konsistenter Snapshot der kompletten Datenbank. Vor jeder Migration wird zusätzlich automatisch ein Backup im Datenordner angelegt.',
+    backupText: 'Lade eine vollständige Sicherung der Datenbank herunter.',
     backupButton: 'Backup herunterladen',
     backingUp: 'Erstelle Backup …',
     importNote: 'Import-Hinweis: Es werden nur Ereignisse importiert, die noch nicht vorhanden sind – ideal zum Zusammenführen mehrerer Installationen.',

@@ -8,8 +8,6 @@ export default {
     ariaOpenAccount: 'Open account of {name}',
     openAccountTitle: '{name} · Account & settings',
     loading: 'Loading …',
-    footerNote: 'Your data stays in your own SQLite file.',
-    footerBackups: 'Automatic backups before migrations',
     nav: {
       list: 'List',
       timeline: 'Timeline',
@@ -522,7 +520,7 @@ export default {
   dataPanel: {
     kicker: 'Data sovereignty',
     heading: 'Export, import & backup',
-    subtitle: 'Your events stay in your SQLite file. Here you can additionally back them up or move them.',
+    subtitle: 'Export your events, import existing entries or back up your archive.',
     exportTitle: 'JSON export',
     exportText: 'All active events and the trash, including categories and date precision.',
     exportButton: 'Export data',
@@ -532,7 +530,7 @@ export default {
     importButton: 'Import file',
     importing: 'Importing …',
     backupTitle: 'SQLite backup (administrator)',
-    backupText: 'Consistent snapshot of the entire database. Before each migration an automatic backup is also created in the data folder.',
+    backupText: 'Download a complete database backup.',
     backupButton: 'Download backup',
     backingUp: 'Creating backup …',
     importNote: 'Import note: only events that do not exist yet are imported — ideal for merging multiple installations.',

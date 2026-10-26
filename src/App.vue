@@ -55,8 +55,7 @@
       </main>
 
       <footer v-if="store.isAuthenticated && route.name !== 'account'" class="mt-6 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-stone-500/80">
-        <span>Chronicles {{ store.appVersion ? `v${store.appVersion}` : '' }} · {{ t('app.footerNote') }}</span>
-        <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-700/70"></span> {{ t('app.footerBackups') }}</span>
+        <span>Chronicles {{ store.appVersion ? `v${store.appVersion}` : '' }}</span>
       </footer>
     </div>
 
