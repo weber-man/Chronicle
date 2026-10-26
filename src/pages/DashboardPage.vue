@@ -1,12 +1,5 @@
 <template>
   <div class="space-y-6">
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <StatCard :label="t('dashboard.statEvents')" :value="store.summary.totalEvents" :hint="t('dashboard.statEventsHint')" />
-      <StatCard :label="t('dashboard.statCategories')" :value="store.summary.totalCategories" :hint="t('dashboard.statCategoriesHint')" />
-      <StatCard :label="t('dashboard.statRange')" :value="rangeLabel" :hint="t('dashboard.statRangeHint', { count: store.summary.ongoingEvents })" />
-      <StatCard :label="t('dashboard.statTrash')" :value="store.summary.trashEvents" :hint="t('dashboard.statTrashHint')" />
-    </div>
-
     <div class="flex flex-wrap justify-end gap-3">
       <button v-if="isDevelopment" class="paper-button rounded-2xl px-5 py-3 text-sm font-medium disabled:opacity-60" type="button" :disabled="creatingDemoEvents" @click="createDemoEvents">
         {{ creatingDemoEvents ? t('dashboard.creatingDemoEvents') : t('dashboard.createDemoEvents') }}
@@ -32,12 +25,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import EventEditorOverlay from '../components/EventEditorOverlay.vue';
 import EventList from '../components/EventList.vue';
-import StatCard from '../components/StatCard.vue';
 import { translateApiError } from '../i18n';
 import type { EventQuery, LifeEvent } from '../lib/types';
 import { useLifelineStore } from '../stores/lifeline';
@@ -77,8 +69,6 @@ watch([() => route.query.capture, () => route.hash], ([capture, hash], previous)
     editingEvent.value = null;
   }
 }, { immediate: true });
-
-const rangeLabel = computed(() => (store.summary.totalEvents ? store.summary.rangeLabel : t('common.nothingYet')));
 
 onMounted(async () => {
   const initialSearch = typeof route.query.search === 'string' ? route.query.search : '';

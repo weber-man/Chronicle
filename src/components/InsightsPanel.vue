@@ -6,7 +6,7 @@
         <h2 class="paper-heading text-2xl font-semibold text-stone-900">{{ t('insights.heading') }}</h2>
         <p class="mt-1 text-sm text-stone-500">{{ t('insights.subtitle', { range: rangeLabel, count: insights.totalEvents }) }}</p>
       </div>
-      <RouterLink v-if="insights.trashEvents" :to="{ name: 'trash' }" class="paper-button rounded-2xl px-4 py-2 text-sm">
+      <RouterLink :to="{ name: 'trash' }" class="paper-button rounded-2xl px-4 py-2 text-sm">
         {{ t('insights.inTrash', { count: insights.trashEvents }) }}
       </RouterLink>
     </div>
@@ -39,20 +39,22 @@
         </div>
       </div>
 
-      <div class="mt-6 grid gap-5 xl:grid-cols-[1.4fr_1fr]">
+      <div class="mt-6 grid items-start gap-5 xl:grid-cols-[1.4fr_1fr]">
         <div class="rounded-3xl border border-amber-900/15 bg-white/35 p-4">
           <div class="flex items-center justify-between gap-3">
             <h3 class="paper-heading text-lg font-semibold text-stone-900">{{ t('insights.chartEventsPerYear') }}</h3>
             <span class="text-xs text-stone-500">{{ t('insights.chartStartYear') }}</span>
           </div>
-          <div class="mt-4 flex h-56 items-end gap-1 overflow-x-auto pb-1" role="img" :aria-label="t('insights.ariaBarChart')">
-            <div v-for="entry in insights.perYear" :key="entry.year" class="group flex h-full min-w-[16px] flex-1 flex-col items-center justify-end gap-1" :title="t('insights.barTitle', { year: entry.year, count: entry.count })">
-              <span class="text-[9px] tabular-nums text-stone-500 opacity-0 transition group-hover:opacity-100">{{ entry.count }}</span>
-              <div
-                class="w-full max-w-12 rounded-t-md bg-gradient-to-t from-amber-900/70 to-amber-500/75 transition group-hover:from-amber-900 group-hover:to-amber-400"
-                :style="{ height: barHeight(entry.count) }"
-              ></div>
-              <span class="text-[9px] tabular-nums text-stone-500">{{ showYearLabel(entry.year) ? entry.year : '' }}</span>
+          <div class="mt-4 flex h-56 gap-1 overflow-x-auto px-2 pb-1" role="img" :aria-label="t('insights.ariaBarChart')">
+            <div v-for="(entry, index) in insights.perYear" :key="entry.year" class="group flex h-full min-w-[16px] flex-1 flex-col items-center" :title="t('insights.barTitle', { year: entry.year, count: entry.count })">
+              <span class="h-4 shrink-0 text-[9px] tabular-nums text-stone-500 opacity-0 transition group-hover:opacity-100">{{ entry.count }}</span>
+              <div class="flex w-full min-h-0 flex-1 items-end justify-center border-b border-amber-900/20">
+                <div
+                  class="w-full max-w-12 rounded-t-md bg-gradient-to-t from-[#805738] to-[#b9996b] transition group-hover:from-[#69462d] group-hover:to-[#a98250]"
+                  :style="{ height: barHeight(entry.count) }"
+                ></div>
+              </div>
+              <span class="h-5 shrink-0 pt-1 text-[9px] leading-4 tabular-nums text-stone-500">{{ showYearLabel(index) ? entry.year : '' }}</span>
             </div>
           </div>
         </div>
@@ -128,9 +130,10 @@ function barHeight(count: number) {
 
 function showYearLabel(index: number) {
   const years = props.insights.perYear;
-  if (years.length <= 18) return true;
+  if (years.length <= 12) return true;
   const step = Math.ceil(years.length / 12);
-  return index % step === 0 || index === years.length - 1;
+  const last = years.length - 1;
+  return index === last || (index % step === 0 && last - index >= Math.ceil(step / 2));
 }
 
 function formatDays(days: number) {
