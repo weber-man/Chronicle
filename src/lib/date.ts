@@ -1,12 +1,29 @@
 import type { LifeEvent, TimelineDate } from './types';
+import { i18n } from '../i18n';
 
-const monthFormatter = new Intl.DateTimeFormat('de-DE', { month: 'long' });
+function t(key: string, values?: Record<string, unknown>) {
+  return values === undefined ? i18n.global.t(key) : i18n.global.t(key, values);
+}
+
+function localeTag() {
+  return i18n.global.locale.value === 'de' ? 'de-DE' : 'en-US';
+}
+
+let monthFormatter: Intl.DateTimeFormat | null = null;
+
+function longMonthFormatter() {
+  const tag = localeTag();
+  if (!monthFormatter || monthFormatter.resolvedOptions().locale !== tag) {
+    monthFormatter = new Intl.DateTimeFormat(tag, { month: 'long' });
+  }
+  return monthFormatter;
+}
 
 export function formatTimelineDate(value: TimelineDate): string {
   if (value.precision === 'year') return `${value.year}`;
   if (value.precision === 'month') {
     const monthDate = new Date(Date.UTC(value.year, (value.month ?? 1) - 1, 1));
-    return `${monthFormatter.format(monthDate)} ${value.year}`;
+    return `${longMonthFormatter().format(monthDate)} ${value.year}`;
   }
 
   const day = String(value.day ?? 1).padStart(2, '0');
@@ -17,7 +34,7 @@ export function formatTimelineDate(value: TimelineDate): string {
 export function formatEventRange(event: LifeEvent): string {
   const start = formatTimelineDate(event.startDate);
   if (!event.endDate) return start;
-  const end = event.isOngoing ? 'heute' : formatTimelineDate(event.endDate);
+  const end = event.isOngoing ? t('date.today') : formatTimelineDate(event.endDate);
   return `${start} – ${end}`;
 }
 
@@ -26,9 +43,9 @@ export function eventDurationLabel(event: LifeEvent): string {
   const end = numericValue(event.endDate ?? event.startDate, 'end');
   const diffDays = Math.max(0, Math.round(end - start));
 
-  if (diffDays < 31) return `${diffDays + 1} Tage`;
-  if (diffDays < 366) return `${Math.max(1, Math.round((diffDays + 1) / 30))} Monate`;
-  return `${Math.max(1, Math.round((diffDays + 1) / 365))} Jahre`;
+  if (diffDays < 31) return t('date.daysDuration', { count: diffDays + 1 });
+  if (diffDays < 366) return t('date.monthsDuration', { count: Math.max(1, Math.round((diffDays + 1) / 30)) });
+  return t('date.yearsDuration', { count: Math.max(1, Math.round((diffDays + 1) / 365)) });
 }
 
 export function numericValue(date: TimelineDate, boundary: 'start' | 'end' = 'start'): number {

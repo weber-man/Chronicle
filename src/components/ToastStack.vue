@@ -14,7 +14,7 @@
               {{ toast.kind === 'success' ? '✓' : toast.kind === 'error' ? '!' : 'i' }}
             </span>
             <p class="flex-1 text-sm leading-5">{{ toast.message }}</p>
-            <button class="rounded-lg px-1.5 text-lg leading-none opacity-60 transition hover:opacity-100" type="button" aria-label="Meldung schließen" @click="store.dismiss(toast.id)">×</button>
+            <button class="rounded-lg px-1.5 text-lg leading-none opacity-60 transition hover:opacity-100" type="button" :aria-label="t('common.close')" @click="store.dismiss(toast.id)">×</button>
           </div>
           <div v-if="toast.action" class="mt-2 flex justify-end">
             <button class="paper-button rounded-xl px-3 py-1.5 text-xs font-medium" type="button" @click="store.runAction(toast)">
@@ -28,8 +28,10 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
 import { useToastStore, type ToastKind } from '../stores/toast';
 
+const { t } = useI18n();
 const store = useToastStore();
 
 function cardClass(kind: ToastKind) {

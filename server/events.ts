@@ -79,7 +79,7 @@ export function getEventById(db: Database.Database, id: number, userId: number) 
     FROM events
     WHERE id = ? AND user_id = ? AND deleted_at IS NULL
   `).get(id, userId) as EventRow | undefined;
-  if (!row) throw new HttpError(404, 'Ereignis nicht gefunden.');
+  if (!row) throw new HttpError(404, 'Event not found.', 'event_not_found');
   return deserializeEvent(row);
 }
 
@@ -163,7 +163,7 @@ export function getSummary(db: Database.Database, userId: number, totalUsers: nu
     totalEvents: Number(row.total),
     rangeLabel: row.firstStart && row.lastEnd
       ? `${String(row.firstStart).slice(0, 4)} – ${String(row.lastEnd).slice(0, 4)}`
-      : 'Noch leer',
+      : 'Empty',
     ongoingEvents: Number(row.ongoing),
     totalCategories: categories.length,
     trashEvents: Number(trash.count),
@@ -200,7 +200,7 @@ export function getInsights(db: Database.Database, userId: number) {
       totalEvents: 0,
       ongoingEvents: 0,
       trashEvents: Number(trash.count),
-      rangeLabel: 'Noch leer',
+      rangeLabel: 'Empty',
       fromYear: null,
       toYear: null,
       coverageYears: 0,
@@ -350,7 +350,7 @@ export function normalizeEvent(payload: EventInput & { userId: number }) {
   if (endDate) validateDate(endDate);
 
   if (endDate && sortKey(startDate, false) > sortKey(endDate, true)) {
-    throw new HttpError(400, 'Das Ende darf nicht vor dem Anfang liegen.');
+    throw new HttpError(400, 'The end must not come before the start.', 'invalid_range');
   }
 
   return {
@@ -483,11 +483,11 @@ function cleanDate(date: TimelineDate): TimelineDate {
 
 function validateDate(date: TimelineDate) {
   if (date.precision === 'year') return;
-  if (!date.month) throw new HttpError(400, 'Monat fehlt.');
+  if (!date.month) throw new HttpError(400, 'Month is missing.', 'invalid_date');
   if (date.precision === 'day') {
-    if (!date.day) throw new HttpError(400, 'Tag fehlt.');
+    if (!date.day) throw new HttpError(400, 'Day is missing.', 'invalid_date');
     if (date.day > daysInMonth(date.year, date.month)) {
-      throw new HttpError(400, 'Dieses Datum existiert nicht.');
+      throw new HttpError(400, 'This date does not exist.', 'invalid_date');
     }
   }
 }
@@ -528,7 +528,7 @@ function ensureEventOwner(db: Database.Database, eventId: number, userId: number
     SELECT id FROM events
     WHERE id = ? AND user_id = ? ${includeDeleted ? '' : 'AND deleted_at IS NULL'}
   `).get(eventId, userId);
-  if (!row) throw new HttpError(404, 'Ereignis nicht gefunden.');
+  if (!row) throw new HttpError(404, 'Event not found.', 'event_not_found');
 }
 
 function signature(title: string, sortStart: string, sortEnd: string, category: string) {

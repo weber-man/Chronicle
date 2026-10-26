@@ -2,52 +2,52 @@
   <section class="paper-panel panel-reveal timeline-shell rounded-[2rem] p-5">
     <div class="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <p class="text-sm font-medium text-stone-500">Visuelle Timeline</p>
-        <p class="mt-1 text-sm text-stone-500">{{ filteredEvents.length }} von {{ events.length }} Einträgen · {{ yearStart }} – {{ yearEnd }}</p>
+        <p class="text-sm font-medium text-stone-500">{{ t('timeline.kicker') }}</p>
+        <p class="mt-1 text-sm text-stone-500">{{ t('timeline.countOf', { shown: filteredEvents.length, total: events.length, from: yearStart, to: yearEnd }) }}</p>
       </div>
 
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <label class="grid gap-1 text-xs text-stone-500">
-          Suche
-          <input v-model="search" class="paper-input w-full rounded-2xl px-3 py-2 text-sm" placeholder="Titel oder Beschreibung" />
+          {{ t('timeline.search') }}
+          <input v-model="search" class="paper-input w-full rounded-2xl px-3 py-2 text-sm" :placeholder="t('timeline.searchPlaceholder')" />
         </label>
 
         <label class="grid gap-1 text-xs text-stone-500">
-          Typ
+          {{ t('timeline.type') }}
           <select v-model="typeFilter" class="paper-input w-full rounded-2xl px-3 py-2 text-sm">
-            <option value="all">Alle</option>
-            <option value="points">Nur Zeitpunkte</option>
-            <option value="ranges">Nur Zeitspannen</option>
-            <option value="ongoing">Nur laufend</option>
+            <option value="all">{{ t('eventList.typeAll') }}</option>
+            <option value="points">{{ t('eventList.typePoints') }}</option>
+            <option value="ranges">{{ t('eventList.typeRanges') }}</option>
+            <option value="ongoing">{{ t('eventList.typeOngoing') }}</option>
           </select>
         </label>
 
         <label class="grid gap-1 text-xs text-stone-500">
-          Kategorie
+          {{ t('timeline.category') }}
           <select v-model="categoryFilter" class="paper-input w-full rounded-2xl px-3 py-2 text-sm">
-            <option value="all">Alle Kategorien</option>
+            <option value="all">{{ t('common.allCategories') }}</option>
             <option v-for="category in categories" :key="category" :value="category">{{ category }}</option>
           </select>
         </label>
 
         <label class="grid gap-1 text-xs text-stone-500">
-          Sortierung
+          {{ t('timeline.sort') }}
           <select v-model="sortMode" class="paper-input w-full rounded-2xl px-3 py-2 text-sm">
-            <option value="start-asc">Früh zuerst</option>
-            <option value="start-desc">Spät zuerst</option>
-            <option value="duration-desc">Lange zuerst</option>
-            <option value="title-asc">Titel A–Z</option>
+            <option value="start-asc">{{ t('eventList.sortStartAsc') }}</option>
+            <option value="start-desc">{{ t('eventList.sortStartDesc') }}</option>
+            <option value="duration-desc">{{ t('eventList.sortDurationDesc') }}</option>
+            <option value="title-asc">{{ t('eventList.sortTitleAsc') }}</option>
           </select>
         </label>
       </div>
     </div>
 
     <div v-if="!events.length" class="rounded-3xl border border-dashed border-amber-900/18 bg-amber-50/50 px-5 py-14 text-center text-stone-500">
-      Sobald Einträge da sind, wird hier die Timeline gezeichnet.
+      {{ t('timeline.empty') }}
     </div>
 
     <div v-else-if="!filteredEvents.length" class="rounded-3xl border border-dashed border-amber-900/18 bg-amber-50/50 px-5 py-14 text-center text-stone-500">
-      Für diese Filter gibt es gerade keine passenden Einträge.
+      {{ t('timeline.emptyFilters') }}
     </div>
 
     <div v-else class="overflow-x-auto">
@@ -102,10 +102,12 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { formatEventRange, numericValue, timelineBounds } from '../lib/date';
 import { splitCategories, type LifeEvent, type User } from '../lib/types';
 
 const props = defineProps<{ events: LifeEvent[]; users: User[] }>();
+const { t } = useI18n();
 
 const search = ref('');
 const typeFilter = ref<'all' | 'points' | 'ranges' | 'ongoing'>('all');
@@ -214,7 +216,7 @@ function userColor(userId: number) {
 }
 
 function userName(userId: number) {
-  return props.users.find((user) => user.id === userId)?.name ?? 'Unbekannt';
+  return props.users.find((user) => user.id === userId)?.name ?? t('common.unknown');
 }
 
 function eventMeta(event: LifeEvent) {

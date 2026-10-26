@@ -2,18 +2,18 @@
   <div class="min-w-0 rounded-2xl border border-amber-900/15 bg-[rgba(255,252,244,0.72)] p-4">
     <div>
       <p class="paper-heading text-sm font-medium text-stone-900">{{ label }}</p>
-      <p class="text-xs text-stone-500">Jahr, Monat oder exaktes Datum</p>
+      <p class="text-xs text-stone-500">{{ t('date.precisionHint') }}</p>
     </div>
 
-    <select v-model="model.precision" class="paper-input mt-3 w-full rounded-2xl px-4 py-3" :aria-label="`${label}: Genauigkeit`">
-      <option value="year">Nur Jahr</option>
-      <option value="month">Monat + Jahr</option>
-      <option value="day">Tag + Monat + Jahr</option>
+    <select v-model="model.precision" class="paper-input mt-3 w-full rounded-2xl px-4 py-3" :aria-label="`${label}: ${t('date.precisionHint')}`">
+      <option value="year">{{ t('date.yearOnly') }}</option>
+      <option value="month">{{ t('date.monthYear') }}</option>
+      <option value="day">{{ t('date.dayMonthYear') }}</option>
     </select>
 
     <div class="mt-3 grid gap-3" :class="fieldGridClass">
       <label class="grid min-w-0 gap-2">
-        <span class="text-xs text-stone-500">Jahr</span>
+        <span class="text-xs text-stone-500">{{ t('date.year') }}</span>
         <input
           v-model.number="model.year"
           type="number"
@@ -26,17 +26,17 @@
       </label>
 
       <label v-if="model.precision !== 'year'" class="grid min-w-0 gap-2">
-        <span class="text-xs text-stone-500">Monat</span>
+        <span class="text-xs text-stone-500">{{ t('date.month') }}</span>
         <select v-model.number="model.month" class="paper-input w-full min-w-0 rounded-2xl px-4 py-3">
-          <option :value="null" disabled>Monat wählen</option>
+          <option :value="null" disabled>{{ t('date.chooseMonth') }}</option>
           <option v-for="month in months" :key="month.value" :value="month.value">{{ month.label }}</option>
         </select>
       </label>
 
       <label v-if="model.precision === 'day'" class="grid min-w-0 gap-2">
-        <span class="text-xs text-stone-500">Tag</span>
+        <span class="text-xs text-stone-500">{{ t('date.day') }}</span>
         <select v-model.number="model.day" class="paper-input w-full min-w-0 rounded-2xl px-4 py-3">
-          <option :value="null" disabled>Tag wählen</option>
+          <option :value="null" disabled>{{ t('date.chooseDay') }}</option>
           <option v-for="day in daysInSelectedMonth" :key="day" :value="day">{{ day }}</option>
         </select>
       </label>
@@ -46,25 +46,16 @@
 
 <script setup lang="ts">
 import { computed, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { TimelineDate } from '../lib/types';
 
 const model = defineModel<TimelineDate>({ required: true });
 defineProps<{ label: string }>();
 
-const months = [
-  { value: 1, label: 'Januar' },
-  { value: 2, label: 'Februar' },
-  { value: 3, label: 'März' },
-  { value: 4, label: 'April' },
-  { value: 5, label: 'Mai' },
-  { value: 6, label: 'Juni' },
-  { value: 7, label: 'Juli' },
-  { value: 8, label: 'August' },
-  { value: 9, label: 'September' },
-  { value: 10, label: 'Oktober' },
-  { value: 11, label: 'November' },
-  { value: 12, label: 'Dezember' },
-];
+const { t } = useI18n();
+
+const months = computed(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+  .map((value) => ({ value, label: t(`date.months.${value}`) })));
 
 const fieldGridClass = computed(() => {
   if (model.value.precision === 'day') return 'md:grid-cols-3';

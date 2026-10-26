@@ -112,13 +112,13 @@ export function verifyCsrfToken(token: string, userId: number, sessionVersion: n
 
 export function assertStrongJwtSecret(secret: string) {
   if (Buffer.byteLength(secret, 'utf8') < MIN_JWT_SECRET_BYTES) {
-    throw new Error(`JWT_SECRET muss mindestens ${MIN_JWT_SECRET_BYTES} Byte lang sein. Erzeuge ihn z. B. mit "openssl rand -hex 48".`);
+    throw new Error(`JWT_SECRET must be at least ${MIN_JWT_SECRET_BYTES} bytes long. Generate it with e.g. "openssl rand -hex 48".`);
   }
   if (JWT_PLACEHOLDER_PATTERN.test(secret)) {
-    throw new Error('JWT_SECRET ist ein Platzhalter und wird abgelehnt. Erzeuge einen zufälligen Wert mit "openssl rand -hex 48".');
+    throw new Error('JWT_SECRET is a placeholder and will be rejected. Generate a random value with "openssl rand -hex 48".');
   }
   if (new Set(secret).size < 10) {
-    throw new Error('JWT_SECRET hat zu wenig Zeichenvielfalt. Erzeuge einen zufälligen Wert mit "openssl rand -hex 48".');
+    throw new Error('JWT_SECRET has too little character variety. Generate a random value with "openssl rand -hex 48".');
   }
 }
 

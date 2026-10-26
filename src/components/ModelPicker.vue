@@ -14,7 +14,7 @@
       @keydown.esc.prevent="closeMenu(false)"
     >
       <span class="min-w-0 truncate">
-        <span class="sr-only">Modell: </span>
+        <span class="sr-only">{{ t('modelPicker.srModel') }}</span>
         {{ selectedLabel }}
       </span>
       <span
@@ -41,12 +41,12 @@
               class="paper-input w-full rounded-xl py-2.5 pl-9 pr-3 text-sm"
               type="text"
               role="combobox"
-              aria-label="Modelle durchsuchen"
+              :aria-label="t('modelPicker.searchAria')"
               aria-autocomplete="list"
               :aria-expanded="open"
               :aria-controls="listId"
               :aria-activedescendant="activeOptionId"
-              placeholder="Nach Name oder ID suchen …"
+              :placeholder="t('modelPicker.searchPlaceholder')"
               autocomplete="off"
               spellcheck="false"
               @keydown.down.prevent="move(1)"
@@ -69,7 +69,7 @@
           <div
             :id="listId"
             role="listbox"
-            aria-label="OpenRouter-Modelle"
+            :aria-label="t('modelPicker.modelListAria')"
             :style="{ height: `${totalOptionHeight}px` }"
             class="relative"
           >
@@ -110,16 +110,16 @@
           </div>
 
           <div v-if="!filteredOptions.length" class="px-3 py-6 text-center">
-            <p class="text-sm text-stone-600">Kein Modell gefunden.</p>
+            <p class="text-sm text-stone-600">{{ t('modelPicker.noModel') }}</p>
             <button class="mt-2 text-xs text-amber-900 underline decoration-dotted underline-offset-4" type="button" @click="resetSearch">
-              Suche zurücksetzen
+              {{ t('modelPicker.resetSearch') }}
             </button>
           </div>
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-2 border-t border-amber-900/15 px-3 py-2 text-[11px] text-stone-500">
           <span>{{ resultLabel }}</span>
-          <span class="hidden sm:inline">↑↓ wählen · Enter übernehmen · Esc schließen</span>
+          <span class="hidden sm:inline">{{ t('modelPicker.navHint') }}</span>
         </div>
       </div>
     </Transition>
@@ -129,6 +129,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue';
 import { onClickOutside, useEventListener } from '@vueuse/core';
+import { useI18n } from 'vue-i18n';
+import { i18n as i18nInstance } from '../i18n';
 import type { AiModel } from '../lib/types';
 
 const props = withDefaults(defineProps<{
@@ -142,6 +144,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: string];
 }>();
+
+const { t } = useI18n();
 
 const OPTION_HEIGHT = 58.5;
 const OVERSCAN = 4;
@@ -158,10 +162,10 @@ const scrollTop = ref(0);
 const viewportHeight = ref(256);
 const idPrefix = useId();
 const listId = `${idPrefix}-models`;
-const contextFormatter = new Intl.NumberFormat('de-DE');
+const contextFormatter = new Intl.NumberFormat(i18nInstance.global.locale.value === 'de' ? 'de-DE' : 'en-US');
 
 const selectedOption = computed(() => props.models.find((option) => option.id === props.modelValue));
-const selectedLabel = computed(() => selectedOption.value?.name || props.modelValue || 'Modell wählen');
+const selectedLabel = computed(() => selectedOption.value?.name || props.modelValue || t('modelPicker.selectModel'));
 
 const filteredOptions = computed(() => {
   const terms = normalize(query.value).split(/\s+/).filter(Boolean);
@@ -194,8 +198,8 @@ const visibleOptions = computed(() => {
 const resultLabel = computed(() => {
   const total = props.models.length;
   const shown = filteredOptions.value.length;
-  if (shown === total) return total === 1 ? '1 Modell' : `${total} Modelle`;
-  return `${shown} von ${total} ${total === 1 ? 'Modell' : 'Modellen'}`;
+  if (shown === total) return t('modelPicker.countModels', { count: total });
+  return t('modelPicker.shownOf', { shown, total });
 });
 
 watch(query, () => {
@@ -329,7 +333,7 @@ function normalize(value: string) {
 }
 
 function formatContext(value: number) {
-  return `${contextFormatter.format(value)} Token`;
+  return `${contextFormatter.format(value)} ${t('modelPicker.tokenUnit')}`;
 }
 </script>
 

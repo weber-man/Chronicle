@@ -2,51 +2,51 @@
   <section class="paper-panel panel-reveal rounded-[2rem] p-5 sm:p-6">
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <p class="text-sm font-medium text-stone-500">Insights</p>
-        <h2 class="paper-heading text-2xl font-semibold text-stone-900">Dein Archiv in Zahlen</h2>
-        <p class="mt-1 text-sm text-stone-500">{{ insights.rangeLabel }} · {{ insights.totalEvents }} aktive {{ insights.totalEvents === 1 ? 'Eintrag' : 'Einträge' }}</p>
+        <p class="text-sm font-medium text-stone-500">{{ t('insights.kicker') }}</p>
+        <h2 class="paper-heading text-2xl font-semibold text-stone-900">{{ t('insights.heading') }}</h2>
+        <p class="mt-1 text-sm text-stone-500">{{ t('insights.subtitle', { range: rangeLabel, count: insights.totalEvents }) }}</p>
       </div>
       <RouterLink v-if="insights.trashEvents" :to="{ name: 'trash' }" class="paper-button rounded-2xl px-4 py-2 text-sm">
-        {{ insights.trashEvents }} im Papierkorb
+        {{ t('insights.inTrash', { count: insights.trashEvents }) }}
       </RouterLink>
     </div>
 
     <div v-if="!insights.totalEvents" class="mt-6 rounded-3xl border border-dashed border-amber-900/20 bg-amber-50/50 px-5 py-14 text-center text-stone-500">
-      Sobald du Ereignisse erfasst, entstehen hier Muster, Jahresvergleiche und Highlights.
+      {{ t('insights.emptyText') }}
     </div>
 
     <template v-else>
       <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div class="insight-tile rounded-2xl border border-amber-900/15 bg-white/45 p-4">
-          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">Zeitspanne</p>
-          <p class="paper-heading mt-2 text-xl font-semibold text-stone-900">{{ insights.coverageYears }} {{ insights.coverageYears === 1 ? 'Jahr' : 'Jahre' }}</p>
-          <p class="mt-1 text-xs text-stone-500">{{ insights.fromYear }} bis {{ insights.toYear }}</p>
+          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">{{ t('insights.tileRange') }}</p>
+          <p class="paper-heading mt-2 text-xl font-semibold text-stone-900">{{ t('date.yearsDuration', { count: insights.coverageYears }) }}</p>
+          <p class="mt-1 text-xs text-stone-500">{{ t('insights.fromTo', { from: insights.fromYear, to: insights.toYear }) }}</p>
         </div>
         <div class="insight-tile rounded-2xl border border-amber-900/15 bg-white/45 p-4">
-          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">Längster Eintrag</p>
+          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">{{ t('insights.tileLongest') }}</p>
           <p class="paper-heading mt-2 truncate text-xl font-semibold text-stone-900" :title="insights.longestEvent?.title">{{ insights.longestEvent?.title }}</p>
           <p class="mt-1 text-xs text-stone-500">{{ formatDays(insights.longestEvent?.days ?? 0) }}</p>
         </div>
         <div class="insight-tile rounded-2xl border border-amber-900/15 bg-white/45 p-4">
-          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">Stärkstes Jahr</p>
+          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">{{ t('insights.tileBusiestYear') }}</p>
           <p class="paper-heading mt-2 text-xl font-semibold text-stone-900">{{ insights.busiestYear?.year ?? '–' }}</p>
-          <p class="mt-1 text-xs text-stone-500">{{ insights.busiestYear?.count ?? 0 }} {{ insights.busiestYear?.count === 1 ? 'Eintrag' : 'Einträge' }}</p>
+          <p class="mt-1 text-xs text-stone-500">{{ t('eventList.count', { count: insights.busiestYear?.count ?? 0 }) }}</p>
         </div>
         <div class="insight-tile rounded-2xl border border-amber-900/15 bg-white/45 p-4">
-          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">Dokumentierte Tage</p>
+          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">{{ t('insights.tileDays') }}</p>
           <p class="paper-heading mt-2 text-xl font-semibold text-stone-900">{{ numberFormat.format(insights.coveredDays) }}</p>
-          <p class="mt-1 text-xs text-stone-500">Ø {{ formatDays(insights.averageDurationDays) }} pro Eintrag</p>
+          <p class="mt-1 text-xs text-stone-500">{{ t('insights.perEntryAvg', { days: formatDays(insights.averageDurationDays) }) }}</p>
         </div>
       </div>
 
       <div class="mt-6 grid gap-5 xl:grid-cols-[1.4fr_1fr]">
         <div class="rounded-3xl border border-amber-900/15 bg-white/35 p-4">
           <div class="flex items-center justify-between gap-3">
-            <h3 class="paper-heading text-lg font-semibold text-stone-900">Ereignisse pro Jahr</h3>
-            <span class="text-xs text-stone-500">Startjahr der Einträge</span>
+            <h3 class="paper-heading text-lg font-semibold text-stone-900">{{ t('insights.chartEventsPerYear') }}</h3>
+            <span class="text-xs text-stone-500">{{ t('insights.chartStartYear') }}</span>
           </div>
-          <div class="mt-4 flex h-56 items-end gap-1 overflow-x-auto pb-1" role="img" aria-label="Balkendiagramm der Ereignisse pro Jahr">
-            <div v-for="entry in insights.perYear" :key="entry.year" class="group flex h-full min-w-[16px] flex-1 flex-col items-center justify-end gap-1" :title="`${entry.year}: ${entry.count} Einträge`">
+          <div class="mt-4 flex h-56 items-end gap-1 overflow-x-auto pb-1" role="img" :aria-label="t('insights.ariaBarChart')">
+            <div v-for="entry in insights.perYear" :key="entry.year" class="group flex h-full min-w-[16px] flex-1 flex-col items-center justify-end gap-1" :title="t('insights.barTitle', { year: entry.year, count: entry.count })">
               <span class="text-[9px] tabular-nums text-stone-500 opacity-0 transition group-hover:opacity-100">{{ entry.count }}</span>
               <div
                 class="w-full max-w-12 rounded-t-md bg-gradient-to-t from-amber-900/70 to-amber-500/75 transition group-hover:from-amber-900 group-hover:to-amber-400"
@@ -59,8 +59,8 @@
 
         <div class="rounded-3xl border border-amber-900/15 bg-white/35 p-4">
           <div class="flex items-center justify-between gap-3">
-            <h3 class="paper-heading text-lg font-semibold text-stone-900">Kategorien</h3>
-            <span class="text-xs text-stone-500">{{ insights.categories.length }} Themen</span>
+            <h3 class="paper-heading text-lg font-semibold text-stone-900">{{ t('insights.categories') }}</h3>
+            <span class="text-xs text-stone-500">{{ t('insights.topics', { count: insights.categories.length }) }}</span>
           </div>
           <div class="mt-4 space-y-3">
             <div v-for="category in insights.categories.slice(0, 10)" :key="category.name">
@@ -72,43 +72,48 @@
                 <div class="h-full rounded-full" :style="{ width: `${Math.max(4, (category.count / maxCategoryCount) * 100)}%`, background: accentGradient }"></div>
               </div>
             </div>
-            <p v-if="insights.categories.length > 10" class="pt-1 text-xs text-stone-500">+ {{ insights.categories.length - 10 }} weitere Kategorien</p>
+            <p v-if="insights.categories.length > 10" class="pt-1 text-xs text-stone-500">{{ t('insights.moreCategories', { count: insights.categories.length - 10 }) }}</p>
           </div>
         </div>
       </div>
 
       <div class="mt-5 grid gap-3 md:grid-cols-3">
         <div class="rounded-2xl border border-amber-900/15 bg-white/40 p-4">
-          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">Frühester Eintrag</p>
+          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">{{ t('insights.earliest') }}</p>
           <p v-if="insights.firstEvent" class="mt-2 truncate text-sm font-semibold text-stone-900">{{ insights.firstEvent.title }}</p>
           <p v-if="insights.firstEvent" class="mt-1 text-xs text-stone-500">{{ formatTimelineDate(insights.firstEvent.date) }}</p>
         </div>
         <div class="rounded-2xl border border-amber-900/15 bg-white/40 p-4">
-          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">Jüngster Eintrag</p>
+          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">{{ t('insights.latest') }}</p>
           <p v-if="insights.lastEvent" class="mt-2 truncate text-sm font-semibold text-stone-900">{{ insights.lastEvent.title }}</p>
           <p v-if="insights.lastEvent" class="mt-1 text-xs text-stone-500">{{ formatTimelineDate(insights.lastEvent.date) }}</p>
         </div>
         <div class="rounded-2xl border border-amber-900/15 bg-white/40 p-4">
-          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">Aktuell laufend</p>
+          <p class="text-xs uppercase tracking-[0.16em] text-stone-500">{{ t('insights.ongoingNow') }}</p>
           <p class="paper-heading mt-2 text-2xl font-semibold text-stone-900">{{ insights.ongoingEvents }}</p>
-          <p class="mt-1 text-xs text-stone-500">Einträge ohne festes Ende</p>
+          <p class="mt-1 text-xs text-stone-500">{{ t('insights.ongoingHint') }}</p>
         </div>
       </div>
 
-      <p class="mt-4 text-[11px] text-stone-500">Berechnet aus aktiven Einträgen. Der Papierkorb zählt separat und verändert diese Zahlen nicht.</p>
+      <p class="mt-4 text-[11px] text-stone-500">{{ t('insights.footnote') }}</p>
     </template>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { formatTimelineDate } from '../lib/date';
+import { i18n as i18nInstance } from '../i18n';
 import type { Insights } from '../lib/types';
 import { useLifelineStore } from '../stores/lifeline';
 
 const props = defineProps<{ insights: Insights }>();
 const store = useLifelineStore();
-const numberFormat = new Intl.NumberFormat('de-DE');
+const { t } = useI18n();
+
+const rangeLabel = computed(() => (props.insights.totalEvents ? props.insights.rangeLabel : t('common.nothingYet')));
+const numberFormat = new Intl.NumberFormat(i18nInstance.global.locale.value === 'de' ? 'de-DE' : 'en-US');
 const maxCategoryCount = computed(() => Math.max(1, ...props.insights.categories.map((category) => category.count)));
 const maxYearCount = computed(() => Math.max(1, ...props.insights.perYear.map((entry) => entry.count)));
 const accentGradient = computed(() => {
@@ -129,8 +134,8 @@ function showYearLabel(index: number) {
 }
 
 function formatDays(days: number) {
-  if (days < 31) return `${days} ${days === 1 ? 'Tag' : 'Tage'}`;
-  if (days < 366) return `${Math.max(1, Math.round(days / 30))} Monate`;
-  return `${Math.max(1, Math.round(days / 365))} Jahre`;
+  if (days < 31) return t('date.daysDuration', { count: days });
+  if (days < 366) return t('date.monthsDuration', { count: Math.max(1, Math.round(days / 30)) });
+  return t('date.yearsDuration', { count: Math.max(1, Math.round(days / 365)) });
 }
 </script>

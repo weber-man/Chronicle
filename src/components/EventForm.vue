@@ -2,35 +2,35 @@
   <section id="event-form" ref="sectionRef" class="paper-panel panel-reveal rounded-[2rem] p-5">
     <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
       <div>
-        <p class="text-sm font-medium text-stone-500">{{ editingEvent ? 'Bearbeiten' : 'Erfassen' }}</p>
+        <p class="text-sm font-medium text-stone-500">{{ editingEvent ? t('eventForm.modeEdit') : t('eventForm.modeCreate') }}</p>
         <h2 class="paper-heading text-xl font-semibold text-stone-900">
-          {{ editingEvent ? `„${editingEvent.title}“ bearbeiten` : 'Neues Ereignis oder Zeitspanne' }}
+          {{ editingEvent ? t('eventForm.headingEdit', { title: editingEvent.title }) : t('eventForm.headingCreate') }}
         </h2>
       </div>
-      <button v-if="editingEvent" class="text-sm text-stone-500 underline decoration-dotted underline-offset-4" type="button" @click="reset">Bearbeitung abbrechen</button>
+      <button v-if="editingEvent" class="text-sm text-stone-500 underline decoration-dotted underline-offset-4" type="button" @click="reset">{{ t('eventForm.cancelEdit') }}</button>
     </div>
 
     <form class="grid gap-4" novalidate @submit.prevent="submit" @keydown.ctrl.enter.prevent="submit" @keydown.meta.enter.prevent="submit">
       <div class="grid gap-4 lg:grid-cols-2">
         <label class="grid min-w-0 gap-2">
-          <span class="text-sm text-stone-600">Titel <span class="text-rose-800" aria-hidden="true">*</span></span>
+          <span class="text-sm text-stone-600">{{ t('eventForm.title') }} <span class="text-rose-800" aria-hidden="true">*</span></span>
           <input
             v-model="form.title"
             class="paper-input w-full rounded-2xl px-4 py-3"
-            placeholder="Urlaub Norwegen"
+            :placeholder="t('eventForm.placeholderTitle')"
             maxlength="120"
             autocomplete="off"
             required
           />
-          <span v-if="fieldError === 'title'" class="text-xs text-rose-800">Bitte einen Titel angeben.</span>
+          <span v-if="fieldError === 'title'" class="text-xs text-rose-800">{{ t('eventForm.titleRequired') }}</span>
         </label>
         <div class="grid min-w-0 gap-2">
-          <span class="text-sm text-stone-600">Kategorien</span>
+          <span class="text-sm text-stone-600">{{ t('eventForm.categories') }}</span>
           <div class="paper-input min-h-[3.5rem] rounded-2xl px-3 py-3">
             <div v-if="selectedCategories.length" class="mb-2 flex flex-wrap gap-2">
               <span v-for="category in selectedCategories" :key="category" class="paper-chip inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs">
                 {{ category }}
-                <button type="button" class="text-stone-500 hover:text-stone-900" :aria-label="`Kategorie ${category} entfernen`" @click="removeCategory(category)">×</button>
+                <button type="button" class="text-stone-500 hover:text-stone-900" :aria-label="t('eventForm.removeCategory', { category })" @click="removeCategory(category)">×</button>
               </span>
             </div>
 
@@ -38,7 +38,7 @@
               v-model="categoryInput"
               list="category-suggestions"
               class="w-full min-w-0 bg-transparent px-1 py-1 text-sm text-stone-900 outline-none placeholder:text-stone-500"
-              placeholder="Kategorie tippen, mit Komma oder Enter übernehmen"
+              :placeholder="t('eventForm.placeholderCategories')"
               autocomplete="off"
               @keydown="handleCategoryKeydown"
               @blur="commitPendingCategory"
@@ -57,27 +57,27 @@
       </div>
 
       <label class="grid min-w-0 gap-2">
-        <span class="text-sm text-stone-600">Beschreibung</span>
-        <textarea v-model="form.description" rows="3" maxlength="1000" class="paper-input w-full rounded-2xl px-4 py-3" placeholder="Was war daran wichtig?"></textarea>
+        <span class="text-sm text-stone-600">{{ t('eventForm.description') }}</span>
+        <textarea v-model="form.description" rows="3" maxlength="1000" class="paper-input w-full rounded-2xl px-4 py-3" :placeholder="t('eventForm.placeholderDescription')"></textarea>
       </label>
 
       <div class="paper-subtle grid gap-4 rounded-3xl p-4 lg:grid-cols-2">
-        <DateField v-model="form.startDate" label="Beginn" />
+        <DateField v-model="form.startDate" :label="t('eventForm.start')" />
         <div class="grid min-w-0 gap-3">
           <div class="flex items-center justify-between">
-            <p class="text-sm text-stone-600">Ende</p>
+            <p class="text-sm text-stone-600">{{ t('eventForm.end') }}</p>
             <label class="flex items-center gap-2 text-sm text-stone-600">
               <input v-model="hasEndDate" type="checkbox" class="rounded border-white/10 bg-white/10" />
-              Zeitspanne
+              {{ t('eventForm.isRange') }}
             </label>
           </div>
-          <DateField v-if="hasEndDate" v-model="form.endDate" label="Ende" />
+          <DateField v-if="hasEndDate" v-model="form.endDate" :label="t('eventForm.end')" />
           <div v-else class="rounded-2xl border border-dashed border-amber-900/20 bg-amber-50/45 px-4 py-6 text-sm text-stone-500">
-            Einzelner Zeitpunkt — perfekt für Geburten, Umzüge oder Abschlüsse.
+            {{ t('eventForm.pointPlaceholder') }}
           </div>
           <label v-if="hasEndDate" class="flex items-center gap-2 text-sm text-stone-600">
             <input v-model="form.isOngoing" type="checkbox" class="rounded border-white/10 bg-white/10" />
-            Läuft noch
+            {{ t('eventForm.isOngoing') }}
           </label>
         </div>
       </div>
@@ -88,9 +88,9 @@
 
       <div class="flex flex-wrap items-center gap-3 pt-2">
         <button class="ink-button interactive-lift rounded-2xl px-5 py-3 font-medium transition hover:scale-[1.01] disabled:opacity-60" type="submit" :disabled="saving">
-          {{ saving ? 'Speichere …' : editingEvent ? 'Ereignis aktualisieren' : 'Ereignis speichern' }}
+          {{ saving ? t('eventForm.saving') : editingEvent ? t('eventForm.submitUpdate') : t('eventForm.submitCreate') }}
         </button>
-        <span class="text-xs text-stone-500">Tipp: Strg/⌘ + Enter speichert sofort.</span>
+        <span class="text-xs text-stone-500">{{ t('eventForm.shortcutHint') }}</span>
       </div>
     </form>
   </section>
@@ -98,7 +98,9 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { numericValue } from '../lib/date';
+import { translateApiError } from '../i18n';
 import { joinCategories, splitCategories, type LifeEvent, type TimelineDate } from '../lib/types';
 import { useLifelineStore } from '../stores/lifeline';
 import { useToastStore } from '../stores/toast';
@@ -106,6 +108,7 @@ import DateField from './DateField.vue';
 
 const props = defineProps<{ editingEvent?: LifeEvent | null }>();
 const emit = defineEmits<{ saved: []; cancel: [] }>();
+const { t } = useI18n();
 const store = useLifelineStore();
 const toast = useToastStore();
 const sectionRef = ref<HTMLElement | null>(null);
@@ -173,24 +176,24 @@ async function submit() {
 
   if (!form.title.trim()) {
     fieldError.value = 'title';
-    error.value = 'Bitte einen Titel angeben.';
+    error.value = t('eventForm.titleRequired');
     return;
   }
 
-  const dateError = validateDate(form.startDate, 'Beginn');
+  const dateError = validateDate(form.startDate, t('eventForm.start'));
   if (dateError) {
     error.value = dateError;
     return;
   }
 
   if (hasEndDate.value) {
-    const endError = validateDate(form.endDate, 'Ende');
+    const endError = validateDate(form.endDate, t('eventForm.end'));
     if (endError) {
       error.value = endError;
       return;
     }
     if (numericValue(form.startDate, 'start') > numericValue(form.endDate, 'end')) {
-      error.value = 'Das Ende darf nicht vor dem Beginn liegen.';
+      error.value = t('eventForm.errorEndBeforeStart');
       return;
     }
   }
@@ -211,9 +214,9 @@ async function submit() {
     reset();
     emit('saved');
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Ereignis konnte nicht gespeichert werden.';
+    error.value = translateApiError(err) || t('eventForm.errorSaveFailed');
     toast.error(error.value);
-    if (error.value.toLocaleLowerCase('de').includes('titel')) fieldError.value = 'title';
+    if (error.value.toLocaleLowerCase().includes('titel') || error.value.toLocaleLowerCase().includes('title')) fieldError.value = 'title';
   } finally {
     saving.value = false;
   }
@@ -254,15 +257,15 @@ function removeCategory(category: string) {
 
 function validateDate(date: TimelineDate, label: string) {
   const year = Number(date.year);
-  if (!Number.isInteger(year) || year < 0 || year > 9999) return `${label}: Bitte ein Jahr zwischen 0 und 9999 angeben.`;
+  if (!Number.isInteger(year) || year < 0 || year > 9999) return t('eventForm.errorYear', { label });
   if (date.precision === 'year') return '';
   const month = Number(date.month);
-  if (!Number.isInteger(month) || month < 1 || month > 12) return `${label}: Bitte einen Monat wählen.`;
+  if (!Number.isInteger(month) || month < 1 || month > 12) return t('eventForm.errorMonth', { label });
   if (date.precision === 'day') {
     const day = Number(date.day);
-    if (!Number.isInteger(day) || day < 1) return `${label}: Bitte einen Tag wählen.`;
+    if (!Number.isInteger(day) || day < 1) return t('eventForm.errorDay', { label });
     const maxDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-    if (day > maxDay) return `${label}: Diesen Tag gibt es in diesem Monat nicht.`;
+    if (day > maxDay) return t('eventForm.errorDayInvalid', { label });
   }
   return '';
 }

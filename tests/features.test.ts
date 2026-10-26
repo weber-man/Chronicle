@@ -328,7 +328,7 @@ test('AI settings encrypt the OpenRouter key and draft/revision responses are va
       const userMessage = body.messages?.at(-1)?.content ?? '';
       const content = userMessage.includes('UNGUELTIG')
         ? '{"title":""}'
-        : JSON.stringify(userMessage.includes('Der Benutzer möchte folgende Änderung:') ? revisedDraft : initialDraft);
+        : JSON.stringify(userMessage.includes('The user wants the following change:') ? revisedDraft : initialDraft);
       return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -403,7 +403,7 @@ test('AI settings encrypt the OpenRouter key and draft/revision responses are va
       prompt: 'UNGUELTIG',
     });
     assert.equal(invalid.status, 502);
-    assert.match(invalid.body.message, /kein gültiger Entwurf/i);
+    assert.match(invalid.body.message, /valid draft/i);
 
     const eventsAfter = await agent.get('/api/events');
     assert.equal(eventsAfter.body.pagination.total, 1);
@@ -421,7 +421,7 @@ test('AI settings encrypt the OpenRouter key and draft/revision responses are va
     assert.equal(afterRemoval.body.configured, false);
     const missingKey = await agent.post('/api/ai/draft').set('x-csrf-token', auth.csrfToken).send({ prompt: 'Neuer Versuch' });
     assert.equal(missingKey.status, 400);
-    assert.match(missingKey.body.message, /API-Key/i);
+    assert.match(missingKey.body.message, /API key/i);
   } finally {
     fixture.cleanup();
   }
@@ -569,14 +569,14 @@ test('CORS only reflects explicitly configured origins and unknown APIs return J
     const missing = await request(fixture.app).get('/api/does-not-exist');
     assert.equal(missing.status, 404);
     assert.match(missing.headers['content-type'], /application\/json/);
-    assert.equal(missing.body.message, 'API-Endpunkt nicht gefunden.');
+    assert.equal(missing.body.message, 'API endpoint not found.');
 
     const malformed = await request(fixture.app)
       .post('/api/auth/login')
       .set('Content-Type', 'application/json')
       .send('{"email":');
     assert.equal(malformed.status, 400);
-    assert.equal(malformed.body.message, 'Ungültiges JSON.');
+    assert.equal(malformed.body.message, 'Invalid JSON.');
   } finally {
     fixture.cleanup();
   }

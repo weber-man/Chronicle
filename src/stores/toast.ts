@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { i18n } from '../i18n';
 
 export type ToastKind = 'success' | 'error' | 'info';
 
@@ -53,7 +54,7 @@ export const useToastStore = defineStore('toast', () => {
     try {
       await toast.action?.run();
     } catch (err) {
-      push('error', err instanceof Error ? err.message : 'Aktion fehlgeschlagen.');
+      push('error', err instanceof Error ? err.message : i18n.global.t('toast.actionFailed'));
     }
   }
 

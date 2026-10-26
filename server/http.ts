@@ -73,24 +73,24 @@ export function clearAuthCookies(res: express.Response, secureCookies: boolean) 
 }
 
 export function requireAuth(req: express.Request, _res: express.Response, next: express.NextFunction) {
-  if (!req.auth) return next(new HttpError(401, 'Nicht angemeldet.'));
+  if (!req.auth) return next(new HttpError(401, 'Not signed in.', 'not_authenticated'));
   return next();
 }
 
 export function requireAdmin(req: express.Request, _res: express.Response, next: express.NextFunction) {
-  if (!req.auth) return next(new HttpError(401, 'Nicht angemeldet.'));
-  if (req.auth.role !== 'admin') return next(new HttpError(403, 'Administratorrechte erforderlich.'));
+  if (!req.auth) return next(new HttpError(401, 'Not signed in.', 'not_authenticated'));
+  if (req.auth.role !== 'admin') return next(new HttpError(403, 'Administrator privileges required.', 'admin_required'));
   return next();
 }
 
 export function requireCsrfForWrites(jwtSecret: string, allowedOrigins: string[] = []) {
   return (req: express.Request, _res: express.Response, next: express.NextFunction) => {
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
-    if (!req.auth) return next(new HttpError(401, 'Nicht angemeldet.'));
+    if (!req.auth) return next(new HttpError(401, 'Not signed in.', 'not_authenticated'));
 
     const origin = req.header('origin');
     if (origin && !isAllowedOrigin(origin, req, allowedOrigins)) {
-      return next(new HttpError(403, 'CSRF-Origin ist ungültig.'));
+      return next(new HttpError(403, 'CSRF origin is invalid.', 'csrf_origin'));
     }
 
     const csrfCookies = [SECURE_CSRF_COOKIE, CSRF_COOKIE]
@@ -98,7 +98,7 @@ export function requireCsrfForWrites(jwtSecret: string, allowedOrigins: string[]
       .filter((token): token is string => Boolean(token));
     const csrfHeader = req.header('x-csrf-token');
     if (!csrfHeader) {
-      return next(new HttpError(403, 'CSRF-Token fehlt oder ist ungültig.'));
+      return next(new HttpError(403, 'CSRF token missing or invalid.', 'csrf_missing'));
     }
     for (const csrfCookie of csrfCookies) {
       if (
@@ -108,7 +108,7 @@ export function requireCsrfForWrites(jwtSecret: string, allowedOrigins: string[]
         return next();
       }
     }
-    return next(new HttpError(403, 'CSRF-Token ist ungültig oder abgelaufen.'));
+    return next(new HttpError(403, 'CSRF token invalid or expired.', 'csrf_invalid'));
   };
 }
 
@@ -181,7 +181,7 @@ export function createRateLimiter() {
       prune(now);
       if (attempts.size > MAX_RATE_LIMIT_ENTRIES) {
         res.setHeader('Retry-After', String(Math.ceil(RATE_LIMIT_WINDOW_MS / 1000)));
-        return next(new HttpError(429, 'Zu viele Versuche. Bitte später erneut probieren.'));
+        return next(new HttpError(429, 'Too many attempts. Please try again later.', 'rate_limited'));
       }
     }
 
@@ -189,7 +189,7 @@ export function createRateLimiter() {
       const current = attempts.get(entry.key);
       if (current && current.resetAt > now && current.count >= entry.limit) {
         res.setHeader('Retry-After', String(Math.max(1, Math.ceil((current.resetAt - now) / 1000))));
-        return next(new HttpError(429, 'Zu viele Versuche. Bitte später erneut probieren.'));
+        return next(new HttpError(429, 'Too many attempts. Please try again later.', 'rate_limited'));
       }
     }
 

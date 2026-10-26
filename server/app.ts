@@ -201,7 +201,7 @@ export function createApp(options: AppOptions = {}) {
 
   if (trustProxy === true) {
     logWarn('startup.trust_proxy_all', {
-      message: 'TRUST_PROXY=true vertraut allen Proxy-Hops und kann IP-basierte Rate-Limits aushebeln. Setze stattdessen einen Hop-Zähler.',
+      message: 'TRUST_PROXY=true trusts all proxy hops and can bypass IP-based rate limits. Use a hop count instead.',
     });
   }
 
@@ -245,14 +245,14 @@ export function createApp(options: AppOptions = {}) {
   app.post('/api/auth/register', authLimiter('register', LOGIN_ATTEMPT_LIMIT, REGISTER_IP_LIMIT), async (req, res) => {
     if (!allowRegistration) {
       logWarn('auth.register_blocked', requestMeta(req, { reason: 'registration_disabled' }));
-      return res.status(403).json({ message: 'Registrierung ist deaktiviert.' });
+      return res.status(403).json({ message: 'Registration is disabled.', code: 'registration_disabled' });
     }
     const payload = registerSchema.parse(req.body);
     if (getUserRowByEmail(db, payload.email)) {
       // Keep the response time close to a successful registration so the
       // endpoint does not become an account-existence oracle.
       await hashPasswordAsync(payload.password);
-      throw new HttpError(400, 'Registrierung konnte nicht abgeschlossen werden.');
+      throw new HttpError(400, 'Registration could not be completed.', 'registration_failed');
     }
 
     const role = activeUserCount(db) === 0 ? 'admin' : 'user';
@@ -270,7 +270,7 @@ export function createApp(options: AppOptions = {}) {
     const validPassword = await verifyPasswordAsync(payload.password, hash) && Boolean(row?.passwordHash);
     if (!row || !validPassword) {
       logWarn('auth.login_failed', requestMeta(req, { emailHash: hashIdentifier(payload.email), reason: 'invalid_credentials' }));
-      return res.status(401).json({ message: 'E-Mail oder Passwort falsch.' });
+      return res.status(401).json({ message: 'Email or password is wrong.', code: 'invalid_credentials' });
     }
 
     if (row.passwordHash && needsRehash(row.passwordHash)) {
@@ -315,7 +315,7 @@ export function createApp(options: AppOptions = {}) {
       logWarn('auth.password_reset_requested_unknown_email', requestMeta(req, { emailHash: hashIdentifier(payload.email) }));
     }
 
-    return res.json({ ok: true, message: 'Falls ein passender Account existiert, wurde ein Reset gestartet.' });
+    return res.json({ ok: true, message: 'If an account exists, a reset was started.' });
   });
 
   app.post('/api/auth/password-reset/confirm', authLimiter('password-reset-confirm', RESET_ATTEMPT_LIMIT, RESET_IP_LIMIT), async (req, res) => {
@@ -330,7 +330,7 @@ export function createApp(options: AppOptions = {}) {
 
     if (!tokenRow || tokenRow.usedAt || new Date(tokenRow.expiresAt).getTime() < Date.now()) {
       logWarn('auth.password_reset_failed', requestMeta(req, { reason: 'invalid_or_expired_token' }));
-      return res.status(400).json({ message: 'Reset-Token ist ungültig oder abgelaufen.' });
+      return res.status(400).json({ message: 'Reset token is invalid or expired.', code: 'reset_token_invalid' });
     }
 
     db.prepare(`
@@ -345,7 +345,7 @@ export function createApp(options: AppOptions = {}) {
     db.prepare('DELETE FROM password_reset_tokens WHERE expires_at < ?').run(new Date().toISOString());
     logInfo('auth.password_reset_success', requestMeta(req, { userId: tokenRow.userId }));
     clearAuthCookies(res, secureCookies);
-    return res.json({ ok: true, message: 'Passwort wurde zurückgesetzt. Bitte neu anmelden.' });
+    return res.json({ ok: true, message: 'Password was reset. Please sign in again.' });
   });
 
   app.get('/api/auth/me', requireAuth, (req, res) => {
@@ -446,7 +446,7 @@ export function createApp(options: AppOptions = {}) {
   app.put('/api/ai/settings', requireAuth, (req, res) => {
     const payload = aiSettingsSchema.parse(req.body);
     if (!payload.apiKey && !payload.model) {
-      throw new HttpError(400, 'API-Key oder Modell fehlt.');
+      throw new HttpError(400, 'API key or model is missing.', 'ai_key_missing');
     }
     const settings = saveAiSettings(db, req.auth!.id, jwtSecret, payload);
     logInfo('ai.settings_updated', requestMeta(req, {
@@ -536,12 +536,12 @@ export function createApp(options: AppOptions = {}) {
   app.patch('/api/account', requireAuth, async (req, res) => {
     const payload = updateAccountSchema.parse(req.body);
     const row = getUserRowById(db, req.auth!.id);
-    if (!row) return res.status(404).json({ message: 'Benutzer nicht gefunden.' });
+    if (!row) return res.status(404).json({ message: 'User not found.', code: 'account_not_found' });
 
     let passwordHash: string | null = null;
     if (payload.newPassword) {
       if (!row.passwordHash || !payload.currentPassword || !(await verifyPasswordAsync(payload.currentPassword, row.passwordHash))) {
-        return res.status(400).json({ message: 'Aktuelles Passwort ist falsch.' });
+        return res.status(400).json({ message: 'The current password is wrong.', code: 'wrong_password' });
       }
       passwordHash = await hashPasswordAsync(payload.newPassword);
     }
@@ -555,7 +555,7 @@ export function createApp(options: AppOptions = {}) {
     });
 
     const updated = getUserById(db, req.auth!.id);
-    if (!updated) return res.status(404).json({ message: 'Benutzer nicht gefunden.' });
+    if (!updated) return res.status(404).json({ message: 'User not found.', code: 'account_not_found' });
 
     if (passwordChanged) {
       const session = getUserSession(db, updated.id)!;
@@ -576,12 +576,12 @@ export function createApp(options: AppOptions = {}) {
     const row = getUserRowById(db, req.auth!.id);
     if (!row?.passwordHash || !(await verifyPasswordAsync(payload.password, row.passwordHash))) {
       logWarn('account.delete_failed', requestMeta(req, { userId: req.auth!.id, reason: 'invalid_password' }));
-      return res.status(400).json({ message: 'Passwort ist falsch.' });
+      return res.status(400).json({ message: 'The password is wrong.', code: 'wrong_password' });
     }
 
     if (row.role === 'admin' && adminCount(db) <= 1) {
       logWarn('account.delete_failed', requestMeta(req, { userId: req.auth!.id, reason: 'last_admin' }));
-      return res.status(400).json({ message: 'Der letzte Administrator kann nicht gelöscht werden.' });
+      return res.status(400).json({ message: 'The last administrator cannot be deleted.', code: 'last_admin' });
     }
 
     deleteUser(db, req.auth!.id);
@@ -606,9 +606,9 @@ export function createApp(options: AppOptions = {}) {
     const payload = adminUpdateUserSchema.parse(req.body);
     const userId = parseId(req.params.id);
     const row = getUserRowById(db, userId);
-    if (!row) return res.status(404).json({ message: 'Benutzer nicht gefunden.' });
+    if (!row) return res.status(404).json({ message: 'User not found.', code: 'account_not_found' });
     if (row.role === 'admin' && payload.role === 'user' && adminCount(db) <= 1) {
-      return res.status(400).json({ message: 'Der letzte Administrator darf nicht herabgestuft werden.' });
+      return res.status(400).json({ message: 'The last administrator may not be demoted.', code: 'last_admin' });
     }
 
     const roleChanged = Boolean(payload.role && payload.role !== row.role);
@@ -641,14 +641,14 @@ export function createApp(options: AppOptions = {}) {
 
   app.get('/api/admin/backup', requireAdmin, (_req, res) => {
     const target = backupDatabase(db, dbPath, backupDir, 'admin-download');
-    if (!target) throw new HttpError(400, 'Backup ist für diese Datenbank nicht verfügbar.');
+    if (!target) throw new HttpError(400, 'Backup is not available for this database.', 'backup_unavailable');
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     logInfo('admin.backup_downloaded', requestMeta(_req, { file: path.basename(target) }));
     res.download(target, `chronicle-backup-${stamp}.sqlite`);
   });
 
   app.use('/api', (_req, res) => {
-    res.status(404).json({ message: 'API-Endpunkt nicht gefunden.' });
+    res.status(404).json({ message: 'API endpoint not found.', code: 'api_not_found' });
   });
 
   if (fs.existsSync(clientIndexPath)) {
@@ -666,43 +666,45 @@ export function createApp(options: AppOptions = {}) {
   }
 
   app.use((_req, res) => {
-    res.status(404).json({ message: 'Nicht gefunden.' });
+    res.status(404).json({ message: 'Not found.', code: 'not_found' });
   });
 
   app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     if (res.headersSent) return;
 
     if (error instanceof z.ZodError) {
-      logWarn('request.validation_failed', requestMeta(req, { message: error.issues[0]?.message ?? 'Ungültige Eingabe.' }));
+      logWarn('request.validation_failed', requestMeta(req, { message: error.issues[0]?.message ?? 'Invalid input.', code: 'validation' }));
       return res.status(400).json({
-        message: error.issues[0]?.message ?? 'Ungültige Eingabe.',
+        message: error.issues[0]?.message ?? 'Invalid input.',
+        code: 'validation',
         issues: error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
       });
     }
 
     if (error instanceof HttpError) {
-      logWarn('request.failed', requestMeta(req, { status: error.status, message: error.message }));
-      return res.status(error.status).json({ message: error.message, requestId: req.requestId });
+      logWarn('request.failed', requestMeta(req, { status: error.status, message: error.message, code: error.code ?? null }));
+      return res.status(error.status).json({ message: error.message, code: error.code, requestId: req.requestId });
     }
 
     if (error instanceof SyntaxError && 'body' in error) {
-      return res.status(400).json({ message: 'Ungültiges JSON.', requestId: req.requestId });
+      return res.status(400).json({ message: 'Invalid JSON.', code: 'malformed_json', requestId: req.requestId });
     }
 
     if (error && typeof error === 'object' && 'status' in error) {
       const status = (error as { status?: unknown }).status;
       if (status === 413) {
-        return res.status(413).json({ message: 'Anfrage ist zu groß.', requestId: req.requestId });
+        return res.status(413).json({ message: 'Request too large.', code: 'request_too_large', requestId: req.requestId });
       }
       if (typeof status === 'number' && status >= 400 && status < 500) {
-        return res.status(status).json({ message: 'Ungültige Anfrage.', requestId: req.requestId });
+        return res.status(status).json({ message: 'Invalid request.', code: 'invalid_request', requestId: req.requestId });
       }
     }
 
-    const message = error instanceof Error ? error.message : 'Unbekannter Fehler.';
+    const message = error instanceof Error ? error.message : 'Unknown error.';
     logError('request.crashed', requestMeta(req, { message, stack: error instanceof Error ? error.stack : undefined }));
     return res.status(500).json({
-      message: 'Interner Serverfehler. Bitte später erneut probieren.',
+      message: 'Internal server error. Please try again later.',
+      code: 'internal_error',
       requestId: req.requestId,
     });
   });
@@ -717,7 +719,7 @@ function defaultDbPath() {
 function parseId(value: string | string[]) {
   const raw = Array.isArray(value) ? value[0] : value;
   const id = Number(raw);
-  if (!Number.isInteger(id) || id < 1) throw new HttpError(400, 'Ungültige ID.');
+  if (!Number.isInteger(id) || id < 1) throw new HttpError(400, 'Invalid ID.', 'invalid_id');
   return id;
 }
 

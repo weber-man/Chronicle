@@ -579,8 +579,8 @@ test('duplicate registration does not reveal whether an account exists', async (
         password: 'AnotherSecurePass123!',
       });
     assert.equal(duplicate.status, 400);
-    assert.equal(duplicate.body.message, 'Registrierung konnte nicht abgeschlossen werden.');
-    assert.doesNotMatch(duplicate.body.message, /bereits|exist/i);
+    assert.equal(duplicate.body.message, 'Registration could not be completed.');
+    assert.doesNotMatch(duplicate.body.message, /already|exists/i);
   } finally {
     fixture.cleanup();
   }

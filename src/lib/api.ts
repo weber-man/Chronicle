@@ -22,6 +22,7 @@ export class ApiError extends Error {
     message: string,
     public requestId?: string,
     public issues?: Array<{ path: string; message: string }>,
+    public code?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -62,7 +63,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers,
     });
   } catch {
-    throw new ApiError(0, 'Server nicht erreichbar. Bitte Verbindung prüfen.');
+    throw new ApiError(0, 'Server unreachable. Please check your connection.');
   }
 
   const text = await response.text();
@@ -76,12 +77,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const error = payload as { message?: string; requestId?: string; issues?: Array<{ path: string; message: string }> } | null;
+    const error = payload as {
+      message?: string;
+      requestId?: string;
+      issues?: Array<{ path: string; message: string }>;
+      code?: string;
+    } | null;
     throw new ApiError(
       response.status,
-      error?.message || `Anfrage fehlgeschlagen (${response.status}).`,
+      error?.message || `Request failed (${response.status}).`,
       error?.requestId,
       error?.issues,
+      error?.code,
     );
   }
 
@@ -103,14 +110,14 @@ async function downloadBlob(path: string, fallbackName: string) {
   try {
     response = await fetch(`/api${path}`, { credentials: 'include' });
   } catch {
-    throw new ApiError(0, 'Server nicht erreichbar. Bitte Verbindung prüfen.');
+    throw new ApiError(0, 'Server unreachable. Please check your connection.');
   }
 
   if (!response.ok) {
     const text = await response.text();
-    let message = `Download fehlgeschlagen (${response.status}).`;
+    let message = `Download failed (${response.status}).`;
     try {
-      const payload = JSON.parse(text) as { message?: string };
+      const payload = JSON.parse(text) as { message?: string; code?: string };
       message = payload.message || message;
     } catch {
       // Keep fallback.

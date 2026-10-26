@@ -2,8 +2,8 @@
   <section class="paper-subtle rounded-3xl p-4 sm:p-5">
     <div class="flex items-start justify-between gap-3">
       <div>
-        <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-500">OpenRouter</p>
-        <h2 class="paper-heading mt-1 text-lg font-semibold text-stone-900">KI-Zugang</h2>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-500">{{ t('aiSettings.kicker') }}</p>
+        <h2 class="paper-heading mt-1 text-lg font-semibold text-stone-900">{{ t('aiSettings.heading') }}</h2>
       </div>
       <span
         class="mt-1 inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-medium"
@@ -12,16 +12,16 @@
           : 'border-amber-900/20 bg-amber-100/70 text-amber-950'"
       >
         <span class="h-1.5 w-1.5 rounded-full" :class="configured ? 'bg-emerald-700' : 'bg-amber-700'"></span>
-        {{ configured ? 'Verbunden' : 'Nicht verbunden' }}
+        {{ configured ? t('aiSettings.connected') : t('aiSettings.notConnected') }}
       </span>
     </div>
 
     <p v-if="configured" class="mt-3 text-sm leading-6 text-stone-600">
-      Key <span class="font-medium text-stone-800">{{ settings?.keyHint ?? '••••' }}</span>.
-      Er wird verschlüsselt in deiner Datenbank gespeichert und nie wieder im Klartext ausgegeben.
+      {{ t('aiSettings.keyStored', { hint: settings?.keyHint ?? '••••' }) }}
+      {{ t('aiSettings.keyEncrypted') }}
     </p>
     <p v-else class="mt-3 text-sm leading-6 text-stone-600">
-      Hinterlege deinen eigenen OpenRouter-API-Key. Er wird AES-256-GCM-verschlüsselt gespeichert.
+      {{ t('aiSettings.keyDescription') }}
     </p>
 
     <p
@@ -29,18 +29,18 @@
       class="mt-3 rounded-2xl border border-rose-900/15 bg-rose-100/70 px-3 py-2.5 text-xs leading-5 text-rose-950"
       role="alert"
     >
-      Der gespeicherte Key kann mit dem aktuellen Server-Secret nicht entschlüsselt werden. Bitte neu hinterlegen.
+      {{ t('aiSettings.needsReentry') }}
     </p>
 
     <div class="mt-4 grid gap-3">
       <label v-if="showKeyForm" class="grid gap-2">
-        <span class="text-sm text-stone-600">{{ configured ? 'Neuer API-Key' : 'API-Key' }}</span>
+        <span class="text-sm text-stone-600">{{ configured ? t('aiSettings.newApiKey') : t('aiSettings.apiKey') }}</span>
         <div class="relative">
           <input
             v-model="apiKey"
             :type="revealKey ? 'text' : 'password'"
             class="paper-input w-full rounded-2xl px-4 py-3 pr-16 font-mono text-sm"
-            placeholder="sk-or-v1-…"
+            :placeholder="t('aiSettings.placeholderKey')"
             autocomplete="off"
             spellcheck="false"
             @keydown.enter.prevent="save"
@@ -50,15 +50,15 @@
             type="button"
             @click="revealKey = !revealKey"
           >
-            {{ revealKey ? 'Verbergen' : 'Zeigen' }}
+            {{ revealKey ? t('aiSettings.hide') : t('aiSettings.show') }}
           </button>
         </div>
-        <span class="text-xs text-stone-500">Der Key wird nur an den Chronicle-Server und von dort an OpenRouter gesendet.</span>
+        <span class="text-xs text-stone-500">{{ t('aiSettings.keyTransportNote') }}</span>
       </label>
 
       <div class="grid gap-2">
         <span class="flex flex-wrap items-center justify-between gap-2 text-sm text-stone-600">
-          <span>Modell</span>
+          <span>{{ t('aiSettings.model') }}</span>
           <button
             v-if="store.modelsSource === 'fallback' && store.models.length"
             class="text-xs text-amber-900 underline decoration-dotted underline-offset-4"
@@ -66,7 +66,7 @@
             :disabled="store.loadingModels"
             @click="refreshModels"
           >
-            {{ store.loadingModels ? 'Lade Modelle …' : 'Offline-Liste · erneut laden' }}
+            {{ store.loadingModels ? t('aiSettings.loadingModels') : t('aiSettings.offlineList') }}
           </button>
         </span>
         <ModelPicker
@@ -75,7 +75,7 @@
           :disabled="store.loadingModels && !modelOptions.length"
         />
         <span class="text-xs text-stone-500">
-          Die Liste kommt von OpenRouter. Suche nach Name oder ID. Das gespeicherte Modell wird für Vorschläge und Überarbeitungen verwendet.
+          {{ t('aiSettings.listNote') }}
         </span>
       </div>
 
@@ -85,7 +85,7 @@
 
       <div class="flex flex-wrap items-center gap-2">
         <button class="ink-button rounded-2xl px-4 py-2.5 text-sm font-medium disabled:opacity-60" type="button" :disabled="saving" @click="save">
-          {{ saving ? 'Speichere …' : configured && !showKeyForm ? 'Modell speichern' : 'Verbindung speichern' }}
+          {{ saving ? t('aiSettings.saveSaving') : configured && !showKeyForm ? t('aiSettings.saveModel') : t('aiSettings.saveConnection') }}
         </button>
         <button
           v-if="configured && showKeyForm"
@@ -93,7 +93,7 @@
           type="button"
           @click="cancelKeyEdit"
         >
-          Abbrechen
+          {{ t('aiSettings.cancel') }}
         </button>
         <button
           v-if="configured && !showKeyForm"
@@ -101,7 +101,7 @@
           type="button"
           @click="showKeyForm = true"
         >
-          Key ersetzen
+          {{ t('aiSettings.replaceKey') }}
         </button>
         <button
           v-if="configured && !confirmRemove"
@@ -110,15 +110,15 @@
           :disabled="removing"
           @click="confirmRemove = true"
         >
-          Verbindung entfernen
+          {{ t('aiSettings.removeConnection') }}
         </button>
         <span v-if="confirmRemove" class="ml-auto inline-flex items-center gap-2 text-xs text-rose-950">
-          Wirklich entfernen?
+          {{ t('aiSettings.reallyRemove') }}
           <button class="paper-button rounded-xl px-2.5 py-1.5" type="button" :disabled="removing" @click="remove">
-            {{ removing ? 'Entferne …' : 'Ja' }}
+            {{ removing ? t('aiSettings.removing') : t('common.yes') }}
           </button>
           <button class="rounded-xl px-2 py-1.5 text-stone-600 hover:text-stone-900" type="button" :disabled="removing" @click="confirmRemove = false">
-            Nein
+            {{ t('common.no') }}
           </button>
         </span>
       </div>
@@ -128,10 +128,13 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { translateApiError } from '../i18n';
 import { useAiStore } from '../stores/ai';
 import { useToastStore } from '../stores/toast';
 import ModelPicker from './ModelPicker.vue';
 
+const { t } = useI18n();
 const store = useAiStore();
 const toast = useToastStore();
 const apiKey = ref('');
@@ -148,7 +151,7 @@ const configured = computed(() => Boolean(settings.value?.configured));
 const modelOptions = computed(() => {
   const entries = [...store.models];
   if (model.value && !entries.some((entry) => entry.id === model.value)) {
-    entries.unshift({ id: model.value, name: `${model.value} (gespeichert)`, contextLength: null });
+    entries.unshift({ id: model.value, name: `${model.value} ${t('aiSettings.storedModelSuffix')}`, contextLength: null });
   }
   return entries;
 });
@@ -174,11 +177,11 @@ const showKeyForm = computed({
 async function save() {
   error.value = '';
   if (showKeyForm.value && !configured.value && !apiKey.value.trim()) {
-    error.value = 'Bitte einen OpenRouter API-Key eingeben.';
+    error.value = t('aiSettings.errorKeyRequired');
     return;
   }
   if (apiKey.value.trim() && apiKey.value.trim().length < 20) {
-    error.value = 'Der API-Key sieht zu kurz aus.';
+    error.value = t('aiSettings.errorKeyTooShort');
     return;
   }
 
@@ -191,9 +194,9 @@ async function save() {
     apiKey.value = '';
     revealKey.value = false;
     keyFormOpen.value = false;
-    toast.success(configured.value ? 'KI-Verbindung gespeichert.' : 'KI-Verbindung eingerichtet.');
+    toast.success(configured.value ? t('aiSettings.toastConfigured') : t('aiSettings.toastSetUp'));
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'KI-Verbindung konnte nicht gespeichert werden.';
+    error.value = translateApiError(err) || t('aiSettings.errorSaveFailed');
     toast.error(error.value);
   } finally {
     saving.value = false;
@@ -208,9 +211,9 @@ async function remove() {
     confirmRemove.value = false;
     keyFormOpen.value = false;
     apiKey.value = '';
-    toast.info('OpenRouter-Verbindung wurde entfernt.');
+    toast.info(t('aiSettings.toastRemoved'));
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Verbindung konnte nicht entfernt werden.';
+    error.value = translateApiError(err) || t('aiSettings.errorRemoveFailed');
     toast.error(error.value);
   } finally {
     removing.value = false;
@@ -228,7 +231,7 @@ async function refreshModels() {
   try {
     await store.loadModels({ force: true });
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Modelle konnten nicht geladen werden.';
+    error.value = translateApiError(err) || t('aiSettings.errorModelsFailed');
   }
 }
 </script>

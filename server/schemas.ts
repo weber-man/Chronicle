@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const emailSchema = z.string().trim().max(254, 'E-Mail ist zu lang.').email('E-Mail ist ungültig.');
+export const emailSchema = z.string().trim().max(254, 'Email is too long.').email('Email is invalid.');
 
 export const timelineDateSchema = z.object({
   precision: z.enum(['year', 'month', 'day']),
@@ -9,15 +9,15 @@ export const timelineDateSchema = z.object({
   day: z.number().int().min(1).max(31).nullable().optional(),
 }).superRefine((value, ctx) => {
   if (value.precision !== 'year' && !value.month) {
-    ctx.addIssue({ code: 'custom', path: ['month'], message: 'Monat fehlt.' });
+    ctx.addIssue({ code: 'custom', path: ['month'], message: 'Month is missing.' });
   }
   if (value.precision === 'day' && !value.day) {
-    ctx.addIssue({ code: 'custom', path: ['day'], message: 'Tag fehlt.' });
+    ctx.addIssue({ code: 'custom', path: ['day'], message: 'Day is missing.' });
   }
 });
 
 export const eventInputSchema = z.object({
-  title: z.string().trim().min(1, 'Titel fehlt.').max(120),
+  title: z.string().trim().min(1, 'Title is missing.').max(120),
   description: z.string().trim().max(1000).default(''),
   category: z.string().trim().min(1).max(200).default('Alltag'),
   startDate: timelineDateSchema,
@@ -83,9 +83,9 @@ export const importPayloadSchema = z.union([
   z.object({
     format: z.string().max(60).optional(),
     version: z.number().int().min(1).max(100).optional(),
-    events: z.array(importEventSchema).min(1, 'Die Datei enthält keine Ereignisse.').max(5000),
+    events: z.array(importEventSchema).min(1, 'The file contains no events.').max(5000),
   }),
-  z.array(importEventSchema).min(1, 'Die Datei enthält keine Ereignisse.').max(5000),
+  z.array(importEventSchema).min(1, 'The file contains no events.').max(5000),
 ]).transform((payload) => ({
   events: Array.isArray(payload) ? payload : payload.events,
 }));
@@ -113,7 +113,7 @@ export const updateAccountSchema = z.object({
   newPassword: z.string().min(12).max(200).optional(),
 }).superRefine((value, ctx) => {
   if (value.newPassword && !value.currentPassword) {
-    ctx.addIssue({ code: 'custom', path: ['currentPassword'], message: 'Aktuelles Passwort fehlt.' });
+    ctx.addIssue({ code: 'custom', path: ['currentPassword'], message: 'Current password is missing.' });
   }
 });
 

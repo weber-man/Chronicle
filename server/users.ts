@@ -135,18 +135,18 @@ export function adminCount(db: Database.Database) {
 
 export function ensureUniqueEmail(db: Database.Database, email: string) {
   const existing = getUserRowByEmail(db, email);
-  if (existing) throw new HttpError(409, 'E-Mail ist bereits vergeben.');
+  if (existing) throw new HttpError(409, 'Email is already taken.', 'email_taken');
 }
 
 export function assertStrongAdminPassword(password: string) {
   if (password.length < MIN_ADMIN_PASSWORD_LENGTH) {
-    throw new Error(`ADMIN_PASSWORD muss mindestens ${MIN_ADMIN_PASSWORD_LENGTH} Zeichen lang sein.`);
+    throw new Error(`ADMIN_PASSWORD must be at least ${MIN_ADMIN_PASSWORD_LENGTH} characters long.`);
   }
   if (WEAK_ADMIN_PASSWORDS.has(password.toLowerCase()) || /^change[-_ ]?me/i.test(password)) {
-    throw new Error('ADMIN_PASSWORD ist zu schwach oder ein bekannter Standardwert und wird abgelehnt.');
+    throw new Error('ADMIN_PASSWORD is too weak or a known default value and will be rejected.');
   }
   if (new Set(password).size < 6) {
-    throw new Error('ADMIN_PASSWORD hat zu wenig Zeichenvielfalt und wird abgelehnt.');
+    throw new Error('ADMIN_PASSWORD has too little character variety and will be rejected.');
   }
 }
 
@@ -160,8 +160,8 @@ export function bootstrapAdmin(
   const password = config.password;
   if (!password) {
     throw new Error(
-      'ADMIN_PASSWORD muss beim ersten Start gesetzt sein. Es gibt keinen bekannten Standard-Admin mehr. '
-      + 'Erzeuge ein starkes Passwort und starte die App erneut.',
+      'ADMIN_PASSWORD must be set on first start. There is no known default admin anymore. '
+      + 'Generate a strong password and start the app again.',
     );
   }
   assertStrongAdminPassword(password);
@@ -207,8 +207,8 @@ export function rotateLegacyDefaultAdmin(db: Database.Database, config: { passwo
   if (!affected.length) return { rotated: 0 };
   if (!config.password) {
     throw new Error(
-      'Ein Administrator mit dem bekannten Standard-Passwort wurde gefunden. '
-      + 'Setze ADMIN_PASSWORD auf ein starkes Passwort, damit der Standard beim Start ersetzt wird.',
+      'An administrator with the known default password was found. '
+      + 'Set ADMIN_PASSWORD to a strong password so the default is replaced on start.',
     );
   }
   assertStrongAdminPassword(config.password);

@@ -6,7 +6,7 @@
           class="palette-panel w-full max-w-2xl overflow-hidden rounded-[1.6rem] border border-amber-900/25 bg-[rgba(252,246,232,0.98)] shadow-[0_30px_80px_rgba(60,40,20,0.35)]"
           role="dialog"
           aria-modal="true"
-          aria-label="Globale Suche und Schnellaktionen"
+          :aria-label="t('commandPalette.aria')"
         >
           <div class="flex items-center gap-3 border-b border-amber-900/15 px-4 py-3">
             <span class="grid h-8 w-8 place-items-center rounded-xl bg-amber-900/10 text-sm text-amber-950" aria-hidden="true">⌕</span>
@@ -14,7 +14,7 @@
               ref="inputRef"
               v-model="query"
               class="min-w-0 flex-1 bg-transparent px-1 py-2 text-base text-stone-900 outline-none placeholder:text-stone-500"
-              placeholder="Ereignisse suchen oder Aktion wählen …"
+              :placeholder="t('commandPalette.placeholder')"
               autocomplete="off"
               spellcheck="false"
               aria-controls="palette-results"
@@ -28,7 +28,7 @@
 
           <div id="palette-results" class="max-h-[min(60vh,34rem)] overflow-y-auto p-2">
             <template v-if="filteredActions.length">
-              <p class="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-500">Schnellaktionen</p>
+              <p class="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-500">{{ t('commandPalette.quickActions') }}</p>
               <button
                 v-for="(action, index) in filteredActions"
                 :key="action.id"
@@ -48,7 +48,7 @@
             </template>
 
             <template v-if="events.length">
-              <p class="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-500">Ereignisse</p>
+              <p class="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-500">{{ t('commandPalette.events') }}</p>
               <button
                 v-for="(event, index) in events"
                 :key="event.id"
@@ -63,20 +63,20 @@
                   <span class="block truncate text-sm font-medium text-stone-900">{{ event.title }}</span>
                   <span class="block truncate text-xs text-stone-500">{{ formatEventRange(event) }} · {{ event.category }}</span>
                 </span>
-                <span class="hidden text-[10px] uppercase tracking-wide text-stone-400 sm:block">Öffnen</span>
+                <span class="hidden text-[10px] uppercase tracking-wide text-stone-400 sm:block">{{ t('commandPalette.open') }}</span>
               </button>
             </template>
 
-            <p v-if="loading" class="px-3 py-6 text-center text-sm text-stone-500">Suche …</p>
+            <p v-if="loading" class="px-3 py-6 text-center text-sm text-stone-500">{{ t('commandPalette.searching') }}</p>
             <p v-else-if="error" class="px-3 py-6 text-center text-sm text-rose-800">{{ error }}</p>
             <p v-else-if="!filteredActions.length && !events.length" class="px-3 py-10 text-center text-sm text-stone-500">
-              Nichts gefunden. Versuche einen anderen Begriff.
+              {{ t('commandPalette.nothingFound') }}
             </p>
           </div>
 
           <footer class="flex flex-wrap items-center justify-between gap-2 border-t border-amber-900/15 px-4 py-2.5 text-[11px] text-stone-500">
-            <span>↑↓ navigieren · Enter öffnen · Esc schließen</span>
-            <span class="inline-flex items-center gap-1"><kbd class="rounded border border-amber-900/15 bg-white/45 px-1.5 py-0.5">⌘</kbd><kbd class="rounded border border-amber-900/15 bg-white/45 px-1.5 py-0.5">K</kbd> jederzeit</span>
+            <span>{{ t('commandPalette.navHint') }}</span>
+            <span class="inline-flex items-center gap-1"><kbd class="rounded border border-amber-900/15 bg-white/45 px-1.5 py-0.5">⌘</kbd><kbd class="rounded border border-amber-900/15 bg-white/45 px-1.5 py-0.5">K</kbd> {{ t('commandPalette.anyTime') }}</span>
           </footer>
         </section>
       </div>
@@ -86,9 +86,11 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api } from '../lib/api';
 import { formatEventRange } from '../lib/date';
+import { translateApiError } from '../i18n';
 import type { LifeEvent } from '../lib/types';
 import { useLifelineStore } from '../stores/lifeline';
 import { useToastStore } from '../stores/toast';
@@ -103,6 +105,7 @@ type PaletteAction = {
   run: () => unknown;
 };
 
+const { t } = useI18n();
 const model = defineModel<boolean>('open', { default: false });
 const store = useLifelineStore();
 const toast = useToastStore();
@@ -119,65 +122,65 @@ let searchRequest = 0;
 const actions = computed<PaletteAction[]>(() => [
   {
     id: 'new-event',
-    label: 'Neues Ereignis erfassen',
-    hint: 'Zur Erfassungsmaske springen',
+    label: t('commandPalette.actionNewEventLabel'),
+    hint: t('commandPalette.actionNewEventHint'),
     icon: '+',
     shortcut: 'N',
-    keywords: 'neu ereignis anlegen erstellen',
+    keywords: t('commandPalette.keywords.newEvent'),
     run: () => router.push({ name: 'dashboard', hash: '#event-form' }),
   },
   {
     id: 'timeline',
-    label: 'Timeline öffnen',
-    hint: 'Alle Ereignisse visuell auf der Zeitachse',
+    label: t('commandPalette.actionTimelineLabel'),
+    hint: t('commandPalette.actionTimelineHint'),
     icon: '◷',
     shortcut: 'T',
-    keywords: 'timeline zeitleiste grafik',
+    keywords: t('commandPalette.keywords.timeline'),
     run: () => router.push({ name: 'timeline' }),
   },
   {
     id: 'insights',
-    label: 'Insights ansehen',
-    hint: 'Jahre, Kategorien und längste Einträge',
+    label: t('commandPalette.actionInsightsLabel'),
+    hint: t('commandPalette.actionInsightsHint'),
     icon: '✧',
     shortcut: 'I',
-    keywords: 'insights statistik analyse zahlen',
+    keywords: t('commandPalette.keywords.insights'),
     run: () => router.push({ name: 'insights' }),
   },
   {
     id: 'assistant',
-    label: 'KI-Assistent öffnen',
-    hint: 'Ereignis beschreiben, Vorschlag prüfen, übernehmen',
+    label: t('commandPalette.actionAssistantLabel'),
+    hint: t('commandPalette.actionAssistantHint'),
     icon: '✦',
     shortcut: 'K',
-    keywords: 'ki ai openrouter assistent vorschlag generieren',
+    keywords: t('commandPalette.keywords.assistant'),
     run: () => router.push({ name: 'assistant' }),
   },
   {
     id: 'trash',
-    label: `Papierkorb${store.trashCount ? ` (${store.trashCount})` : ''}`,
-    hint: 'Gelöschte Einträge wiederherstellen',
+    label: t('commandPalette.actionTrashLabel', { count: store.trashCount ? ` (${store.trashCount})` : '' }),
+    hint: t('commandPalette.actionTrashHint'),
     icon: '♲',
     shortcut: 'P',
-    keywords: 'trash papierkorb gelöscht wiederherstellen',
+    keywords: t('commandPalette.keywords.trash'),
     run: () => router.push({ name: 'trash' }),
   },
   {
     id: 'account',
-    label: 'Account & Daten',
-    hint: 'Profil, Passwort, Export und Import',
+    label: t('commandPalette.actionAccountLabel'),
+    hint: t('commandPalette.actionAccountHint'),
     icon: '⌂',
     shortcut: 'A',
-    keywords: 'account profil passwort export import backup',
+    keywords: t('commandPalette.keywords.account'),
     run: () => router.push({ name: 'account', query: { from: '/' } }),
   },
   {
     id: 'export',
-    label: 'Daten exportieren',
-    hint: 'Alle Ereignisse als JSON herunterladen',
+    label: t('commandPalette.actionExportLabel'),
+    hint: t('commandPalette.actionExportHint'),
     icon: '↓',
     shortcut: 'E',
-    keywords: 'export download json daten backup',
+    keywords: t('commandPalette.keywords.exportData'),
     run: () => store.exportData(),
   },
 ]);
@@ -240,7 +243,7 @@ async function searchEvents(term: string) {
     events.value = data.events;
   } catch (err) {
     if (requestId !== searchRequest) return;
-    error.value = err instanceof Error ? err.message : 'Suche fehlgeschlagen.';
+    error.value = translateApiError(err) || t('commandPalette.searchError');
   } finally {
     if (requestId === searchRequest) loading.value = false;
   }
@@ -267,7 +270,7 @@ async function runAction(action: PaletteAction) {
   try {
     await action.run();
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : 'Aktion fehlgeschlagen.');
+    toast.error(translateApiError(err) || t('commandPalette.actionFailed'));
   }
 }
 

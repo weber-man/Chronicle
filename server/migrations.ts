@@ -120,7 +120,7 @@ export function runMigrations(
   const from = getSchemaVersion(db);
   if (from > latestSchemaVersion) {
     throw new Error(
-      `Die Datenbank wurde mit einer neueren Version erstellt (Schema ${from}, unterstützt ${latestSchemaVersion}). Bitte die App aktualisieren.`,
+      `The database was created with a newer version (schema ${from}, supported ${latestSchemaVersion}). Please update the app.`,
     );
   }
 

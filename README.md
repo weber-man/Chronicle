@@ -1,24 +1,27 @@
 # Chronicles
 
-Private Zeitleiste für Lebensereignisse, Erinnerungen und Pläne. Fullstack-App mit Vue 3, TypeScript, Tailwind CSS, Express und SQLite.
+A private timeline for life events, memories and plans. Fullstack app with Vue 3, TypeScript, Tailwind CSS, Express and SQLite.
 
-## Funktionen
+The UI is fully localized in English and German (via `vue-i18n`). A language switcher is available in the header and on the login/account pages; the choice is stored in `localStorage`. All server logs, API messages, code comments and this README are in English (system-level). Stored user data such as event titles and categories is never translated.
 
-- Zeitleiste mit Jahres-, Monats- und Tagesgenauigkeit sowie laufenden Ereignissen
-- serverseitige Suche, Kategorie-/Typ-Filter, Sortierung und Pagination
-- Papierkorb mit Wiederherstellen und endgültigem Löschen
-- Insights-Dashboard (Kategorien, Jahrzehnte, aktive Jahre, Datenabdeckung)
-- JSON-Export und merge-only Import
-- Admin-Backup der SQLite-Datenbank als Download
-- KI-Assistent über OpenRouter: Freitext → validierter Entwurf, Vorschau, Bearbeitung, iterative Korrektur und explizite Freigabe
-- Command Palette (`Strg`/`Cmd` + `K`), Toasts und Tastatur-Navigation
-- Benutzerkonten mit Rollen, Session-Widerruf und Passwort-Reset
+## Features
 
-## Start
+- Timeline with year, month and day precision, plus ongoing events
+- Server-side search, category/type filters, sorting and pagination
+- Trash with restore and permanent deletion
+- Insights dashboard (categories, decades, active years, data coverage)
+- JSON export and merge-only import
+- Admin backup of the SQLite database as download
+- AI assistant via OpenRouter: free text → validated draft, preview, editing, iterative revision and explicit approval
+- Command palette (`Ctrl`/`Cmd` + `K`), toasts and keyboard navigation
+- User accounts with roles, session revocation and password reset
+- Localized UI in English and German
+
+## Getting started
 
 ```bash
 cp .env.example .env
-# ADMIN_PASSWORD in .env setzen (mindestens 12 Zeichen, kein Standardwert)
+# Set ADMIN_PASSWORD in .env (at least 12 characters, no known default)
 npm install
 npm run dev
 ```
@@ -26,9 +29,9 @@ npm run dev
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:3001`
 
-Die SQLite-Datei liegt standardmäßig unter `data/lifeline.sqlite`. Der Server lädt `.env` beim Start automatisch. Beim ersten Start ist `ADMIN_PASSWORD` Pflicht; es gibt keinen bekannten Standard-Administrator mehr. Wird eine bestehende Datenbank mit dem alten Standard-Passwort erkannt, ersetzt der Server es beim Start durch `ADMIN_PASSWORD` und invalidiert alle alten Sessions. Ohne gesetztes `ADMIN_PASSWORD` verweigert er den Start.
+The SQLite file lives at `data/lifeline.sqlite` by default. The server loads `.env` automatically on start. `ADMIN_PASSWORD` is required on the first start; there is no known default admin anymore. If an existing database still contains the old default admin, the server replaces it on start using `ADMIN_PASSWORD` and invalidates all old sessions. Without `ADMIN_PASSWORD` it refuses to start.
 
-## Tests und Build
+## Tests and build
 
 ```bash
 npm run typecheck
@@ -37,109 +40,109 @@ npm run build
 npm start
 ```
 
-`npm test` startet die API-Tests inklusive Migration, Auth, Suche, Papierkorb, Export/Import, Insights und KI-Entwürfen.
+`npm test` runs the API tests including migrations, auth, search, trash, export/import, insights, AI drafts and an i18n key-parity check.
 
-In Production liefert Express auch das gebaute Frontend aus. Ein Reverse Proxy kann daher auf den einen Node-Port zeigen.
+In production Express also serves the built frontend, so a single Node port behind a reverse proxy is enough.
 
-## Datenbank, Migrationen und Backups
+## Database, migrations and backups
 
-Das Schema wird über versionierte Migrationen (`PRAGMA user_version`) verwaltet. Beim Start:
+The schema is managed through versioned migrations (`PRAGMA user_version`). On start:
 
-1. wird die vorhandene Schema-Version gelesen,
-2. vor einer echten Migration eine konsistente SQLite-Kopie unter `data/backups/` angelegt,
-3. die ausstehenden Migrationen in einer Transaktion angewendet.
+1. the current schema version is read,
+2. before a real migration a consistent SQLite copy is created under `data/backups/`,
+3. pending migrations run inside a transaction.
 
-Migrationen erweitern das Schema und füllen fehlende Werte auf. Vorhandene Benutzer, Ereignisse und Passwort-Hashes bleiben erhalten. Die letzten 20 Migrationsbackups werden aufbewahrt; ältere werden automatisch entfernt.
+Migrations extend the schema and fill missing values. Existing users, events and password hashes are preserved. The last 20 migration backups are kept; older ones are removed automatically.
 
-Ein Datenbank-Backup lässt sich zusätzlich als Administrator über **Konto → Daten → Datenbank-Backup** herunterladen oder über `GET /api/admin/backup`.
+Administrators can additionally download a database backup via **Account → Data → Database backup** or `GET /api/admin/backup`.
 
-> Beim Upgrade eines bestehenden Docker-Volumes zuerst ein Backup des Volumes erstellen. Das Image läuft als nicht privilegierter `node`-Benutzer; ein altes Volume kann noch `root` gehören. In diesem Fall einmalig `chown -R 1000:1000` auf das Volume anwenden.
+> When upgrading an existing Docker volume, back it up first. The image runs as the unprivileged `node` user; an old volume may still be owned by `root`. In that case apply `chown -R 1000:1000` to the volume once.
 
 ### Import
 
-Der Import ist bewusst **merge-only**: vorhandene Daten werden nie ersetzt. Ereignisse mit gleichem Titel, Startdatum und gleicher Kategorie gelten als Duplikat und werden übersprungen. Das Ergebnis meldet `imported`, `skipped` und `total`.
+Import is deliberately **merge-only**: existing data is never replaced. Events with the same title, start date and category are treated as duplicates and skipped. The result reports `imported`, `skipped` and `total`.
 
-## KI-Assistent (OpenRouter)
+## AI assistant (OpenRouter)
 
-Unter **KI** kann pro Benutzer ein eigener OpenRouter-API-Key hinterlegt und ein Modell aus der OpenRouter-Modellliste gewählt werden.
+Under **AI** each user can store their own OpenRouter API key and choose a model from the OpenRouter model list.
 
-- Der Key wird mit AES-256-GCM verschlüsselt in der Tabelle `ai_settings` gespeichert. Der Schlüssel dafür wird aus `JWT_SECRET` abgeleitet. Wird `JWT_SECRET` geändert, muss der OpenRouter-Key neu hinterlegt werden; die App weist darauf hin.
-- Der Key wird nie im Klartext an den Browser zurückgegeben, sondern nur als maskierter Hinweis (letzte vier Zeichen).
-- Die Modellliste wird serverseitig 15 Minuten gecacht und nach der Anmeldung im Hintergrund vorgeladen. Schlägt OpenRouter fehl, wird die Fallback-Liste 60 Sekunden lang verwendet, damit die nächste Anfrage erneut versucht wird.
-- Ein Freitext wird an OpenRouter gesendet; die Antwort muss ein JSON-Ereignis sein und wird serverseitig gegen dasselbe Schema wie normale Ereignisse geprüft.
-- Der Entwurf wird **nicht automatisch gespeichert**. Du kannst ihn bearbeiten, von der KI überarbeiten lassen (jede Antwort wird erneut validiert) oder verwerfen.
-- Beim Erzeugen und Überarbeiten werden die Beschreibung und die Namen deiner vorhandenen Kategorien an OpenRouter übertragen. Ereignisse werden nicht automatisch mitgesendet.
-- OpenRouter-Aufrufe sind pro Benutzer rate-limitiert.
+- The key is stored AES-256-GCM encrypted in the `ai_settings` table. The key for that is derived from `JWT_SECRET`. If `JWT_SECRET` changes, the OpenRouter key must be re-entered; the app points this out.
+- The key is never returned to the browser in plain text, only as a masked hint (last four characters).
+- The model list is cached server-side for 15 minutes and prefetched in the background after login. If OpenRouter fails, a fallback list is used for 60 seconds so the next request retries.
+- Free text is sent to OpenRouter; the answer must be a JSON event and is validated server-side against the same schema as normal events.
+- The draft is **not saved automatically**. You can edit it, have the AI revise it (every answer is validated again) or discard it.
+- When generating and revising, your description and the names of your existing categories are sent to OpenRouter. Event contents are not sent automatically.
+- OpenRouter calls are rate-limited per user and per IP.
 
-## API-Überblick
+## API overview
 
-| Methode | Pfad | Zweck |
+| Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/health` | Liveness, Version und Schema-Version |
-| `GET` | `/api/health/ready` | Readiness inkl. Datenbank-Check |
-| `GET` | `/api/events` | Liste mit `search`, `category`, `type`, `sort`, `page`, `pageSize` |
-| `POST` | `/api/events` | Ereignis anlegen |
-| `PUT` | `/api/events/:id` | Ereignis aktualisieren |
-| `DELETE` | `/api/events/:id` | In den Papierkorb verschieben (`?permanent=true` für endgültig) |
-| `GET` | `/api/events/trash` | Papierkorb lesen |
-| `POST` | `/api/events/:id/restore` | Ereignis wiederherstellen |
-| `DELETE` | `/api/trash` | Papierkorb leeren |
-| `GET` | `/api/insights` | Statistiken und Verteilungen |
-| `GET` | `/api/ai/settings` | KI-Verbindung lesen (Key nur maskiert) |
-| `PUT` | `/api/ai/settings` | OpenRouter-Key und/oder Modell speichern |
-| `DELETE` | `/api/ai/settings` | OpenRouter-Key entfernen |
-| `GET` | `/api/ai/models` | OpenRouter-Modelle laden (Fallback-Liste bei Netzwerkfehler) |
-| `POST` | `/api/ai/draft` | Ereignis-Entwurf aus Freitext erzeugen |
-| `POST` | `/api/ai/revise` | Vorhandenen Entwurf per Anweisung überarbeiten |
-| `GET` | `/api/export` | JSON-Export (`?includeTrash=false` optional) |
-| `POST` | `/api/import` | JSON-Import (merge-only) |
-| `GET` | `/api/admin/backup` | SQLite-Backup herunterladen |
+| `GET` | `/api/health` | Liveness, version and schema version |
+| `GET` | `/api/health/ready` | Readiness including a database check |
+| `GET` | `/api/events` | List with `search`, `category`, `type`, `sort`, `page`, `pageSize` |
+| `POST` | `/api/events` | Create an event |
+| `PUT` | `/api/events/:id` | Update an event |
+| `DELETE` | `/api/events/:id` | Move to trash (`?permanent=true` for permanent deletion) |
+| `GET` | `/api/events/trash` | Read the trash |
+| `POST` | `/api/events/:id/restore` | Restore an event |
+| `DELETE` | `/api/trash` | Empty the trash |
+| `GET` | `/api/insights` | Statistics and distributions |
+| `GET` | `/api/ai/settings` | Read AI connection (key masked only) |
+| `PUT` | `/api/ai/settings` | Save OpenRouter key and/or model |
+| `DELETE` | `/api/ai/settings` | Remove the OpenRouter key |
+| `GET` | `/api/ai/models` | Load OpenRouter models (fallback list on network errors) |
+| `POST` | `/api/ai/draft` | Create an event draft from free text |
+| `POST` | `/api/ai/revise` | Revise an existing draft by instruction |
+| `GET` | `/api/export` | JSON export (`?includeTrash=false` optional) |
+| `POST` | `/api/import` | JSON import (merge-only) |
+| `GET` | `/api/admin/backup` | Download a SQLite backup |
 
-Alle Ereignis- und Daten-Endpunkte benötigen eine Session. Schreibende Requests benötigen zusätzlich das CSRF-Token.
+All event and data endpoints require a session. Write requests additionally require the CSRF token. Error responses carry an English `message` plus a stable `code`; the frontend maps known codes to the current UI language.
 
-## Umgebungsvariablen
+## Environment variables
 
-| Variable | Bedeutung |
+| Variable | Meaning |
 | --- | --- |
-| `PORT` | HTTP-Port, Standard `3001` |
-| `DB_PATH` | Pfad zur SQLite-Datei, Standard `data/lifeline.sqlite` |
-| `JWT_SECRET` | Signatur-Secret und Basis für die Verschlüsselung der OpenRouter-Keys. Mindestens 48 Byte; Platzhalter wie `change-me` werden abgelehnt. Ohne Wert wird ein Secret in `data/.jwt-secret` erzeugt und wiederverwendet |
-| `OPENROUTER_BASE_URL` | Optional; Standard `https://openrouter.ai/api/v1` |
-| `OPENROUTER_DEFAULT_MODEL` | Optional; Standardmodell für neue KI-Verbindungen, Standard `openai/gpt-4o-mini` |
-| `OPENROUTER_SITE_URL` | Optional; Wert für den `HTTP-Referer`-Header an OpenRouter, Standard `http://localhost:3001` |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Bootstrap-Administrator beim ersten Start. `ADMIN_PASSWORD` ist bei einer leeren Datenbank immer Pflicht; bekannte Standardwerte werden abgelehnt. |
-| `ADMIN_NAME`, `ADMIN_COLOR` | Anzeigename und Farbe des Bootstrap-Administrators |
-| `ALLOW_REGISTRATION` | Öffentliche Registrierung ist standardmäßig deaktiviert; nur `true` aktiviert sie |
-| `CORS_ORIGINS` | Kommagetrennte erlaubte Origins; ohne Wert werden keine Cross-Origin-Requests erlaubt |
-| `TRUST_PROXY` | Express-`trust proxy`-Wert, z. B. `1` oder `loopback`. `true` vertraut allen Hops und schwächt IP-Rate-Limits; nur mit Bedacht verwenden. |
-| `LOG_REQUESTS` | `true` aktiviert strukturierte Request-Logs |
-| `APP_VERSION` | Optionale Versionsanzeige in `/api/health` |
-| `NODE_ENV` | `production` aktiviert sichere Cookies und `__Host-`-Cookie-Namen |
+| `PORT` | HTTP port, default `3001` |
+| `DB_PATH` | Path to the SQLite file, default `data/lifeline.sqlite` |
+| `JWT_SECRET` | Signing secret and base for OpenRouter key encryption. At least 48 bytes; placeholders such as `change-me` are rejected. Without a value a secret is generated and reused from `data/.jwt-secret` |
+| `OPENROUTER_BASE_URL` | Optional; default `https://openrouter.ai/api/v1` |
+| `OPENROUTER_DEFAULT_MODEL` | Optional; default model for new AI connections, default `openai/gpt-4o-mini` |
+| `OPENROUTER_SITE_URL` | Optional; `HTTP-Referer` header value sent to OpenRouter, default `http://localhost:3001` |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Bootstrap administrator on first start. `ADMIN_PASSWORD` is always required for an empty database; known default values are rejected. |
+| `ADMIN_NAME`, `ADMIN_COLOR` | Display name and color of the bootstrap administrator |
+| `ALLOW_REGISTRATION` | Public registration is disabled by default; only `true` enables it |
+| `CORS_ORIGINS` | Comma-separated allowed origins; without a value no cross-origin requests are allowed |
+| `TRUST_PROXY` | Express `trust proxy` value, e.g. `1` or `loopback`. `true` trusts all hops and weakens IP rate limits; use with caution. |
+| `LOG_REQUESTS` | `true` enables structured request logs |
+| `APP_VERSION` | Optional version shown in `/api/health` |
+| `NODE_ENV` | `production` enables secure cookies and `__Host-` cookie names |
 
-## Sicherheit
+## Security
 
-- HTTP-only JWT-Cookie für Sessions; in Production mit `__Host-`-Präfix
-- signiertes, an Benutzer und Session-Version gebundenes CSRF-Token plus Origin-Prüfung
-- Passwort-Hashing via `scrypt` mit `N=2^17`; alte Hashes werden bei erfolgreichem Login automatisch rehasht
-- keine Standard-Admin-Zugangsdaten; bekannte Altlasten werden beim Start rotiert oder der Start wird verweigert
-- Rollenmodell mit `admin` und `user`
-- strikte Datentrennung pro Benutzer
-- Rate Limiting pro IP und pro Konto/E-Mail auf Login, Registrierung, Passwort-Reset und KI-Aufrufe
-- OpenRouter-Keys AES-256-GCM-verschlüsselt at rest, nie im Klartext im API-Response
-- Passwort-Reset mit kurzlebigem Token; Tokens werden nie über die API zurückgegeben und bei Passwortänderungen invalidiert
-- Session-Widerruf über `session_version` nach Passwort-/Rollenänderung und beim Logout
-- CSP und weitere Security-Header
-- Fehlerantworten ohne interne Details; Logs enthalten keine E-Mail-Adressen oder Ereignistitel
+- HTTP-only JWT session cookie; `__Host-` prefix in production
+- signed CSRF token bound to user and session version, plus Origin validation
+- password hashing via `scrypt` with `N=2^17`; legacy hashes are rehashed on successful login
+- no default admin credentials; known legacy defaults are rotated on start or startup is refused
+- role model with `admin` and `user`
+- strict per-user data isolation
+- rate limiting per IP and per account/email on login, registration, password reset and AI calls
+- OpenRouter keys AES-256-GCM encrypted at rest, never in plain text in API responses
+- password reset with short-lived token; tokens are never returned over the API and are invalidated on password changes
+- session revocation via `session_version` after password/role changes and on logout
+- CSP and other security headers
+- error responses without internal details; logs contain no email addresses, event titles or reset tokens
 
-Passwort-Reset-Tokens werden über den optionalen Server-Hook `onPasswordResetToken` an einen Mail- oder Benachrichtigungsdienst übergeben. Die HTTP-Antwort ist immer identisch, unabhängig davon, ob ein Konto existiert.
+Password-reset tokens are delivered through the optional server hook `onPasswordResetToken` to a mail or notification service. The HTTP response is identical whether or not an account exists.
 
-## Docker / Deployment
+## Docker / deployment
 
-Das Image baut Frontend und Backend zusammen. Der Container läuft als `node`-Benutzer und besitzt einen Healthcheck gegen `/api/health/ready`.
+The image builds the frontend and backend together. The container runs as the `node` user and has a health check against `/api/health/ready`.
 
 ```bash
 export JWT_SECRET="$(openssl rand -hex 48)"
-export ADMIN_PASSWORD="$(openssl rand -base64 24)" # sicher speichern
+export ADMIN_PASSWORD="$(openssl rand -base64 24)" # save this securely
 docker build -f Dockerfile -t chronicles-backend .
 docker run --rm -p 3001:3001 \
   -e NODE_ENV=production \
@@ -150,7 +153,7 @@ docker run --rm -p 3001:3001 \
   chronicles-backend
 ```
 
-Beispiel mit Docker Compose:
+Example with Docker Compose:
 
 ```yaml
 services:
@@ -185,12 +188,12 @@ volumes:
   chronicles_data:
 ```
 
-### Reverse Proxy
+### Reverse proxy
 
-- Proxy auf den Chronicles-Container-Port, z. B. `http://127.0.0.1:3001`.
-- Bei einem Proxy `TRUST_PROXY` passend setzen, damit Rate-Limiting die echte Client-IP sieht.
-- Wenn dein Proxy eine Content-Security-Policy setzt, darf sie nicht `default-src 'none'` sein, sonst werden die Frontend-Assets blockiert.
-- Minimal brauchbar ist z. B.:
+- Proxy to the Chronicles container port, e.g. `http://127.0.0.1:3001`.
+- Set `TRUST_PROXY` appropriately so rate limiting sees the real client IP.
+- If your proxy sets a Content-Security-Policy, it must not be `default-src 'none'` or the frontend assets will be blocked.
+- A minimal working example:
 
 ```text
 Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self' data:;
@@ -198,11 +201,11 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 
 ## CI
 
-`.github/workflows/ci.yml` prüft bei Pushes und Pull Requests:
+`.github/workflows/ci.yml` checks on pushes and pull requests:
 
 1. `npm ci`
 2. `npm run typecheck`
 3. `npm test`
 4. `npm run build`
 
-Der Docker-Release-Workflow baut bei Tags weiterhin das Image für GitHub Container Registry. GitHub Actions und das Docker-Basisimage sind auf feste Commit-/Digest-Werte gepinnt; Dependabot prüft npm-, Action- und Docker-Updates wöchentlich.
+The Docker release workflow still builds the image for GitHub Container Registry on tags. GitHub Actions and the Docker base image are pinned to fixed commit/digest values; Dependabot checks npm, action and Docker updates weekly.

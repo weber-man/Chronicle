@@ -1,10 +1,10 @@
 <template>
   <div class="space-y-6">
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <StatCard label="Ereignisse" :value="store.summary.totalEvents" hint="Zeitpunkte und Zeitspannen zusammen" />
-      <StatCard label="Kategorien" :value="store.summary.totalCategories" hint="Themen in deinem Archiv" />
-      <StatCard label="Zeitraum" :value="store.summary.rangeLabel" :hint="`${store.summary.ongoingEvents} laufende Einträge`" />
-      <StatCard label="Papierkorb" :value="store.summary.trashEvents" hint="Jederzeit wiederherstellbar" />
+      <StatCard :label="t('dashboard.statEvents')" :value="store.summary.totalEvents" :hint="t('dashboard.statEventsHint')" />
+      <StatCard :label="t('dashboard.statCategories')" :value="store.summary.totalCategories" :hint="t('dashboard.statCategoriesHint')" />
+      <StatCard :label="t('dashboard.statRange')" :value="rangeLabel" :hint="t('dashboard.statRangeHint', { count: store.summary.ongoingEvents })" />
+      <StatCard :label="t('dashboard.statTrash')" :value="store.summary.trashEvents" :hint="t('dashboard.statTrashHint')" />
     </div>
 
     <EventForm ref="eventFormRef" :editing-event="editingEvent" @saved="editingEvent = null" @cancel="editingEvent = null" />
@@ -25,21 +25,26 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import EventForm from '../components/EventForm.vue';
 import EventList from '../components/EventList.vue';
 import StatCard from '../components/StatCard.vue';
+import { translateApiError } from '../i18n';
 import type { EventQuery, LifeEvent } from '../lib/types';
 import { useLifelineStore } from '../stores/lifeline';
 import { useToastStore } from '../stores/toast';
 
+const { t } = useI18n();
 const store = useLifelineStore();
 const toast = useToastStore();
 const route = useRoute();
 const router = useRouter();
 const editingEvent = ref<LifeEvent | null>(null);
 const eventFormRef = ref<InstanceType<typeof EventForm> | null>(null);
+
+const rangeLabel = computed(() => (store.summary.totalEvents ? store.summary.rangeLabel : t('common.nothingYet')));
 
 onMounted(async () => {
   const initialSearch = typeof route.query.search === 'string' ? route.query.search : '';
@@ -50,7 +55,7 @@ onMounted(async () => {
     type: 'all',
     sort: 'start-asc',
   });
-  if (initialSearch) toast.info(`Gefiltert nach „${initialSearch}“.`);
+  if (initialSearch) toast.info(t('dashboard.filteredBy', { term: initialSearch }));
 });
 
 watch(
@@ -66,7 +71,7 @@ async function applyQuery(patch: Partial<EventQuery>) {
   try {
     await store.loadEvents(patch);
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : 'Ereignisse konnten nicht geladen werden.');
+    toast.error(translateApiError(error) || t('dashboard.loadFailed'));
   }
   if ('search' in patch) {
     const current = typeof route.query.search === 'string' ? route.query.search : '';
@@ -81,12 +86,12 @@ async function applyQuery(patch: Partial<EventQuery>) {
 }
 
 async function removeEvent(event: LifeEvent) {
-  if (!window.confirm(`"${event.title}" in den Papierkorb verschieben?`)) return;
+  if (!window.confirm(t('common.confirmMoveToTrash', { title: event.title }))) return;
   if (editingEvent.value?.id === event.id) editingEvent.value = null;
   try {
     await store.removeEvent(event.id);
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : 'Ereignis konnte nicht gelöscht werden.');
+    toast.error(translateApiError(error) || t('dashboard.loadFailed'));
   }
 }
 

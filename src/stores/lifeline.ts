@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { api, ApiError, setCsrfToken } from '../lib/api';
+import { i18n } from '../i18n';
 import type {
   EventFacets,
   EventListResponse,
@@ -15,10 +16,14 @@ import { splitCategories } from '../lib/types';
 import { useAiStore } from './ai';
 import { useToastStore } from './toast';
 
+const t = (key: string, values?: Record<string, unknown>) => (
+  values === undefined ? i18n.global.t(key) : i18n.global.t(key, values)
+);
+
 const emptySummary = (): Summary => ({
   totalUsers: 0,
   totalEvents: 0,
-  rangeLabel: 'Noch leer',
+  rangeLabel: '',
   ongoingEvents: 0,
   totalCategories: 0,
   trashEvents: 0,
@@ -97,7 +102,7 @@ export const useLifelineStore = defineStore('lifeline', () => {
         await Promise.all([loadEvents(query.value), loadAdminUsers()]);
       } catch (error) {
         if (!(error instanceof ApiError && (error.status === 401 || error.status === 0))) {
-          toast.error(error instanceof Error ? error.message : 'App konnte nicht geladen werden.');
+          toast.error(error instanceof Error ? error.message : t('common.loadFailed'));
         }
         reset();
       } finally {
@@ -245,7 +250,7 @@ export const useLifelineStore = defineStore('lifeline', () => {
       const event = id ? await api.updateEvent(id, payload) : await api.createEvent(payload);
       await refreshEvents();
       if (insights.value) await loadInsights();
-      toast.success(id ? `„${event.title}“ wurde aktualisiert.` : `„${event.title}“ wurde gespeichert.`);
+      toast.success(id ? t('toast.eventUpdated', { title: event.title }) : t('toast.eventSaved', { title: event.title }));
       return event;
     } finally {
       isSaving.value = false;
@@ -258,8 +263,8 @@ export const useLifelineStore = defineStore('lifeline', () => {
     await refreshEvents();
     if (insights.value) await loadInsights();
     if (trashLoaded.value) await loadTrash();
-    toast.success(`„${event?.title ?? 'Eintrag'}“ liegt jetzt im Papierkorb.`, {
-      label: 'Wiederherstellen',
+    toast.success(t('toast.entryTrashed', { title: event?.title ?? t('common.entry') }), {
+      label: t('toast.restoreAction'),
       run: () => restoreEvent(id),
     });
   }
@@ -269,7 +274,7 @@ export const useLifelineStore = defineStore('lifeline', () => {
     await refreshEvents();
     if (insights.value) await loadInsights();
     if (trashLoaded.value) await loadTrash();
-    toast.success(`„${event.title}“ wurde wiederhergestellt.`);
+    toast.success(t('toast.eventRestored', { title: event.title }));
     return event;
   }
 
@@ -278,7 +283,7 @@ export const useLifelineStore = defineStore('lifeline', () => {
     await api.purgeEvent(id);
     await loadTrash();
     if (insights.value) await loadInsights();
-    toast.info(`„${event?.title ?? 'Eintrag'}“ wurde endgültig gelöscht.`);
+    toast.info(t('toast.entryPurged', { title: event?.title ?? t('common.entry') }));
   }
 
   async function emptyTrash() {
@@ -286,7 +291,7 @@ export const useLifelineStore = defineStore('lifeline', () => {
     await loadTrash();
     await refreshEvents();
     if (insights.value) await loadInsights();
-    toast.info(`${result.removed} ${result.removed === 1 ? 'Eintrag wurde' : 'Einträge wurden'} endgültig gelöscht.`);
+    toast.info(t('toast.trashEmptied', { count: result.removed }));
   }
 
   async function updateAccount(payload: Record<string, unknown>) {
@@ -294,7 +299,7 @@ export const useLifelineStore = defineStore('lifeline', () => {
     if (data.csrfToken) setCsrfToken(data.csrfToken);
     me.value = data.user;
     await loadAdminUsers();
-    toast.success('Account wurde gespeichert.');
+    toast.success(t('toast.accountSaved'));
   }
 
   async function deleteAccount(password: string) {
@@ -306,7 +311,7 @@ export const useLifelineStore = defineStore('lifeline', () => {
   async function createUser(payload: { name: string; color: string; email: string; password: string; role: 'admin' | 'user' }) {
     await api.createAdminUser(payload);
     await loadAdminUsers();
-    toast.success('Benutzer wurde angelegt.');
+    toast.success(t('toast.userCreated'));
   }
 
   async function updateUser(id: number, payload: Record<string, unknown>) {
@@ -318,7 +323,7 @@ export const useLifelineStore = defineStore('lifeline', () => {
 
   async function exportData() {
     const filename = await api.exportData();
-    toast.success(`Export erstellt: ${filename}`);
+    toast.success(t('toast.exportCreated', { filename }));
   }
 
   async function importData(payload: unknown) {
@@ -326,16 +331,20 @@ export const useLifelineStore = defineStore('lifeline', () => {
     await refreshEvents();
     if (insights.value) await loadInsights();
     if (trashLoaded.value) await loadTrash();
-    const message = result.imported === 0
-      ? `Keine neuen Ereignisse importiert (${result.skipped} Duplikate übersprungen).`
-      : `${result.imported} ${result.imported === 1 ? 'Ereignis' : 'Ereignisse'} importiert${result.skipped ? `, ${result.skipped} Duplikate übersprungen` : ''}.`;
+    let message: string;
+    if (result.imported === 0) {
+      message = t('toast.importNoNew', { skipped: result.skipped });
+    } else {
+      message = t('toast.importSome', { imported: result.imported });
+      if (result.skipped) message += t('toast.importSkipSuffix', { skipped: result.skipped });
+    }
     toast.success(message);
     return result;
   }
 
   async function downloadBackup() {
     const filename = await api.downloadBackup();
-    toast.success(`Datenbank-Backup heruntergeladen: ${filename}`);
+    toast.success(t('toast.backupDownloaded', { filename }));
   }
 
   function applyListResponse(data: EventListResponse) {

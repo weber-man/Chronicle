@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { i18n } from './i18n';
 import AccountPage from './pages/AccountPage.vue';
 import AssistantPage from './pages/AssistantPage.vue';
 import DashboardPage from './pages/DashboardPage.vue';
@@ -7,6 +8,27 @@ import LoginPage from './pages/LoginPage.vue';
 import NotFoundPage from './pages/NotFoundPage.vue';
 import TimelinePage from './pages/TimelinePage.vue';
 import TrashPage from './pages/TrashPage.vue';
+
+function pageTitleKey(name: string) {
+  switch (name) {
+    case 'dashboard': return 'app.nav.list';
+    case 'timeline': return 'app.nav.timeline';
+    case 'insights': return 'app.nav.insights';
+    case 'assistant': return 'app.nav.ai';
+    case 'trash': return 'app.nav.trash';
+    case 'account': return 'account.heading';
+    case 'login': return 'login.headingLogin';
+    case 'not-found': return 'notFound.heading';
+    default: return '';
+  }
+}
+
+export function refreshDocumentTitle() {
+  const name = router.currentRoute.value.name ? String(router.currentRoute.value.name) : '';
+  const key = pageTitleKey(name);
+  const title = key ? i18n.global.t(key) : 'Chronicles';
+  document.title = `${title} · Chronicles`;
+}
 
 const router = createRouter({
   history: createWebHistory(),
@@ -27,18 +49,8 @@ const router = createRouter({
   },
 });
 
-router.afterEach((to) => {
-  const titles: Record<string, string> = {
-    dashboard: 'Liste & Erfassen',
-    timeline: 'Timeline',
-    insights: 'Insights',
-    assistant: 'KI-Assistent',
-    trash: 'Papierkorb',
-    account: 'Account',
-    login: 'Anmelden',
-    'not-found': 'Nicht gefunden',
-  };
-  document.title = `${titles[String(to.name)] ?? 'Chronicles'} · Chronicles`;
+router.afterEach(() => {
+  refreshDocumentTitle();
 });
 
 export default router;
