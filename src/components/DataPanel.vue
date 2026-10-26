@@ -1,48 +1,18 @@
 <template>
-  <section class="paper-panel panel-reveal rounded-[2rem] p-5 sm:p-6">
-    <div>
-      <p class="text-sm font-medium text-stone-500">{{ t('dataPanel.kicker') }}</p>
-      <h2 class="paper-heading text-xl font-semibold text-stone-900">{{ t('dataPanel.heading') }}</h2>
-      <p class="mt-1 text-sm text-stone-500">{{ t('dataPanel.subtitle') }}</p>
-    </div>
-
-    <div class="mt-5 grid gap-4 lg:grid-cols-2">
-      <div class="paper-subtle rounded-3xl p-4">
-        <h3 class="font-medium text-stone-900">{{ t('dataPanel.exportTitle') }}</h3>
-        <p class="mt-1 text-sm text-stone-500">{{ t('dataPanel.exportText') }}</p>
-        <button class="ink-button mt-4 rounded-2xl px-4 py-2.5 text-sm font-medium disabled:opacity-60" type="button" :disabled="exporting" @click="exportData">
-          {{ exporting ? t('dataPanel.exporting') : t('dataPanel.exportButton') }}
-        </button>
-      </div>
-
-      <div class="paper-subtle rounded-3xl p-4">
-        <h3 class="font-medium text-stone-900">{{ t('dataPanel.importTitle') }}</h3>
-        <p class="mt-1 text-sm text-stone-500">{{ t('dataPanel.importText') }}</p>
-        <input ref="fileInput" class="sr-only" type="file" accept="application/json,.json" @change="importFile" />
-        <button class="paper-button mt-4 rounded-2xl px-4 py-2.5 text-sm font-medium disabled:opacity-60" type="button" :disabled="importing" @click="fileInput?.click()">
-          {{ importing ? t('dataPanel.importing') : t('dataPanel.importButton') }}
-        </button>
-      </div>
-    </div>
-
-    <div v-if="store.isAdmin" class="mt-4 rounded-3xl border border-amber-900/15 bg-amber-50/40 p-4">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 class="font-medium text-stone-900">{{ t('dataPanel.backupTitle') }}</h3>
-          <p class="mt-1 text-sm text-stone-500">{{ t('dataPanel.backupText') }}</p>
-        </div>
-        <button class="paper-button rounded-2xl px-4 py-2.5 text-sm font-medium disabled:opacity-60" type="button" :disabled="backingUp" @click="downloadBackup">
-          {{ backingUp ? t('dataPanel.backingUp') : t('dataPanel.backupButton') }}
-        </button>
-      </div>
-    </div>
-
-    <p class="mt-4 text-xs text-stone-500">{{ t('dataPanel.importNote') }}</p>
-  </section>
+  <div class="settings-data-stack">
+    <div class="settings-data-banner"><div class="settings-data-art" aria-hidden="true"><FileJson :size="42" :stroke-width="1" /><span>CHRONICLES<br />{{ new Date().getFullYear() }}</span></div><div><span class="settings-eyebrow">{{ t('dataPanel.kicker') }}</span><h3>{{ t('settings.dataBannerTitle') }}</h3><p>{{ t('settings.dataBannerNote') }}</p></div><ArrowUpRight class="settings-data-banner-arrow" :size="28" :stroke-width="1" /></div>
+    <section class="settings-surface settings-transfer-list">
+      <div class="settings-transfer"><span class="settings-icon-tile"><ArrowDownToLine :size="22" :stroke-width="1.5" /></span><div><h3>{{ t('dataPanel.exportTitle') }}</h3><p>{{ t('dataPanel.exportText') }}</p><span class="settings-format">JSON</span></div><button class="ink-button settings-primary" type="button" :disabled="exporting" @click="exportData">{{ exporting ? t('dataPanel.exporting') : t('dataPanel.exportButton') }}<ArrowDownToLine :size="15" /></button></div>
+      <div class="settings-transfer"><span class="settings-icon-tile"><ArrowUpFromLine :size="22" :stroke-width="1.5" /></span><div><h3>{{ t('dataPanel.importTitle') }}</h3><p>{{ t('dataPanel.importText') }}</p><span class="settings-format">JSON · {{ t('settings.maxFileSize') }}</span></div><input ref="fileInput" class="sr-only" type="file" accept="application/json,.json" :aria-label="t('dataPanel.importButton')" @change="importFile" /><button class="paper-button settings-secondary" type="button" :disabled="importing" @click="fileInput?.click()">{{ importing ? t('dataPanel.importing') : t('dataPanel.importButton') }}<ArrowUpFromLine :size="15" /></button></div>
+      <div v-if="store.isAdmin" class="settings-transfer"><span class="settings-icon-tile"><Database :size="22" :stroke-width="1.5" /></span><div><h3>{{ t('dataPanel.backupTitle') }}</h3><p>{{ t('dataPanel.backupText') }}</p><span class="settings-format">SQLITE · {{ t('common.admin') }}</span></div><button class="paper-button settings-secondary" type="button" :disabled="backingUp" @click="downloadBackup">{{ backingUp ? t('dataPanel.backingUp') : t('dataPanel.backupButton') }}<ArrowDownToLine :size="15" /></button></div>
+    </section>
+    <p class="settings-small-note"><ShieldCheck :size="17" />{{ t('dataPanel.importNote') }}</p>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { ArrowDownToLine, ArrowUpFromLine, ArrowUpRight, Database, FileJson, ShieldCheck } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
 import { translateApiError } from '../i18n';
 import { useLifelineStore } from '../stores/lifeline';

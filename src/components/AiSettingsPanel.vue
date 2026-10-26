@@ -1,5 +1,5 @@
 <template>
-  <section class="paper-subtle rounded-3xl p-4 sm:p-5">
+  <section class="settings-ai-panel">
     <div class="flex items-start justify-between gap-3">
       <div>
         <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-500">{{ t('aiSettings.kicker') }}</p>

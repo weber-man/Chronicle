@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { i18n } from './i18n';
-import AccountPage from './pages/AccountPage.vue';
 import DashboardPage from './pages/DashboardPage.vue';
 import InsightsPage from './pages/InsightsPage.vue';
 import LoginPage from './pages/LoginPage.vue';
@@ -36,7 +35,7 @@ const router = createRouter({
     { path: '/insights', name: 'insights', component: InsightsPage },
     { path: '/assistant', name: 'assistant', redirect: { name: 'dashboard', query: { capture: 'ai' } } },
     { path: '/trash', name: 'trash', component: TrashPage },
-    { path: '/account', name: 'account', component: AccountPage },
+    { path: '/account', name: 'account', component: () => import('./pages/AccountPage.vue') },
     { path: '/login', name: 'login', component: LoginPage },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundPage },
   ],

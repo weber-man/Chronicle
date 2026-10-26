@@ -1,110 +1,84 @@
 <template>
-  <section class="paper-panel rounded-[2rem] p-5">
-    <div class="flex items-center justify-between gap-4">
-      <div>
-        <h2 class="paper-heading text-xl font-semibold text-stone-900">{{ t('userPanel.heading') }}</h2>
-        <p class="mt-1 text-sm text-stone-500">{{ t('userPanel.subtitle') }}</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <span class="h-4 w-4 rounded-full border border-amber-900/15" :style="{ backgroundColor: store.me?.color ?? '#7c3aed' }"></span>
-        <p class="text-sm font-medium text-stone-700">{{ store.me?.name }}</p>
-      </div>
-    </div>
-
-    <form class="paper-subtle mt-5 grid gap-4 rounded-3xl p-4 lg:grid-cols-2" @submit.prevent="saveAccount">
-      <label class="grid gap-2">
-        <span class="text-sm text-stone-600">{{ t('userPanel.name') }}</span>
-        <input v-model="account.name" class="paper-input rounded-2xl px-4 py-3" maxlength="60" autocomplete="name" />
-      </label>
-      <label class="grid gap-2">
-        <span class="text-sm text-stone-600">{{ t('userPanel.color') }}</span>
-        <input v-model="account.color" type="color" class="paper-input h-12 rounded-2xl p-2" />
-      </label>
-      <label class="grid gap-2">
-        <span class="text-sm text-stone-600">{{ t('userPanel.currentPassword') }}</span>
-        <input v-model="account.currentPassword" type="password" class="paper-input rounded-2xl px-4 py-3" :placeholder="t('userPanel.placeholderCurrentPassword')" autocomplete="current-password" />
-      </label>
-      <label class="grid gap-2">
-        <span class="text-sm text-stone-600">{{ t('userPanel.newPassword') }}</span>
-        <input v-model="account.newPassword" type="password" class="paper-input rounded-2xl px-4 py-3" :placeholder="t('userPanel.placeholderNewPassword')" autocomplete="new-password" />
-      </label>
-      <div class="flex flex-wrap gap-3 lg:col-span-2">
-        <button class="ink-button rounded-2xl px-4 py-3 font-medium disabled:opacity-60" type="submit" :disabled="savingAccount">
-          {{ savingAccount ? t('common.saving') : t('userPanel.saveAccount') }}
-        </button>
-        <button class="rounded-2xl border border-rose-900/15 bg-rose-100/70 px-4 py-3 text-rose-950 disabled:opacity-50" type="button" :disabled="deletingAccount" @click="removeAccount">
-          {{ deletingAccount ? t('common.deleting') : t('userPanel.deleteAccount') }}
-        </button>
-        <span class="self-center text-xs text-stone-500">{{ t('userPanel.passwordChangeNote') }}</span>
-      </div>
-    </form>
-
-    <div v-if="store.isAdmin" class="mt-6 space-y-4">
-      <div>
-        <h3 class="paper-heading text-lg font-semibold text-stone-900">{{ t('userPanel.adminHeading') }}</h3>
-        <p class="mt-1 text-sm text-stone-500">{{ t('userPanel.adminSubtitle') }}</p>
-      </div>
-
-      <form class="paper-subtle grid gap-4 rounded-3xl p-4 lg:grid-cols-2" @submit.prevent="createUser">
-        <label class="grid gap-2">
-          <span class="text-sm text-stone-600">{{ t('userPanel.name') }}</span>
-          <input v-model="newUser.name" class="paper-input rounded-2xl px-4 py-3" maxlength="60" required />
-        </label>
-        <label class="grid gap-2">
-          <span class="text-sm text-stone-600">{{ t('userPanel.color') }}</span>
-          <input v-model="newUser.color" type="color" class="paper-input h-12 rounded-2xl p-2" />
-        </label>
-        <label class="grid gap-2">
-          <span class="text-sm text-stone-600">{{ t('userPanel.email') }}</span>
-          <input v-model="newUser.email" type="email" class="paper-input rounded-2xl px-4 py-3" autocomplete="off" required />
-        </label>
-        <label class="grid gap-2">
-          <span class="text-sm text-stone-600">{{ t('userPanel.password') }}</span>
-          <input v-model="newUser.password" type="password" class="paper-input rounded-2xl px-4 py-3" minlength="12" autocomplete="new-password" :placeholder="t('userPanel.placeholderNewPassword')" required />
-        </label>
-        <label class="grid gap-2 lg:max-w-xs">
-          <span class="text-sm text-stone-600">{{ t('userPanel.role') }}</span>
-          <select v-model="newUser.role" class="paper-input rounded-2xl px-4 py-3">
-            <option value="user">{{ t('userPanel.roleUser') }}</option>
-            <option value="admin">{{ t('userPanel.roleAdmin') }}</option>
-          </select>
-        </label>
-        <div class="lg:col-span-2">
-          <button class="ink-button rounded-2xl px-4 py-3 font-medium disabled:opacity-60" type="submit" :disabled="creatingUser">
-            {{ creatingUser ? t('userPanel.creating') : t('userPanel.createUser') }}
-          </button>
+  <div>
+    <div v-if="section === 'profile'" class="settings-profile-grid">
+      <form class="settings-surface settings-profile-form" @submit.prevent="saveAccount">
+        <div class="settings-profile-preview">
+          <span class="settings-profile-avatar" :style="{ backgroundColor: account.color }">{{ account.name.trim().charAt(0).toUpperCase() || 'C' }}</span>
+          <div><span class="settings-eyebrow">{{ t('settings.thisIsYou') }}</span><h3>{{ account.name || store.me?.name }}</h3><p>{{ store.me?.email }}</p></div>
+          <span class="settings-preview-spark" aria-hidden="true">✳</span>
         </div>
+        <div class="settings-form-body">
+          <div class="settings-field"><label for="profile-name">{{ t('userPanel.name') }}</label><input id="profile-name" v-model="account.name" class="paper-input" maxlength="60" autocomplete="name" aria-describedby="profile-name-hint" required /><small id="profile-name-hint">{{ t('settings.nameHint') }}</small></div>
+          <div class="settings-field"><span>{{ t('userPanel.email') }}</span><div class="settings-readonly"><Mail :size="16" /><span>{{ store.me?.email }}</span><LockKeyhole :size="13" /></div></div>
+          <fieldset class="settings-colors"><legend>{{ t('settings.signatureColor') }}</legend><p>{{ t('settings.colorHint') }}</p><div class="settings-swatch-row">
+            <button v-for="color in colors" :key="color.value" type="button" class="settings-swatch" :style="{ backgroundColor: color.value }" :aria-label="t(`settings.colors.${color.name}`)" :aria-pressed="account.color.toLowerCase() === color.value" @click="account.color = color.value"><Check v-if="account.color.toLowerCase() === color.value" :size="17" /></button>
+            <label class="settings-custom-color" :title="t('settings.customColor')"><Palette :size="18" /><input v-model="account.color" type="color" :aria-label="t('settings.customColor')" /></label>
+            <span class="settings-color-code">{{ account.color }}</span>
+          </div></fieldset>
+        </div>
+        <div class="settings-savebar"><span class="settings-save-status" :class="{ 'is-dirty': profileDirty }"><span></span>{{ profileDirty ? t('settings.unsaved') : t('settings.upToDate') }}</span><button class="ink-button settings-primary" type="submit" :disabled="savingAccount || !profileDirty"><Check :size="16" />{{ savingAccount ? t('common.saving') : t('settings.saveProfile') }}</button></div>
       </form>
-
-      <div class="space-y-2">
-        <div v-for="user in store.adminUsers" :key="user.id" class="paper-subtle flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3">
-          <div>
-            <p class="font-medium text-stone-900">{{ user.name }} <span class="text-xs text-stone-500">({{ user.email }})</span></p>
-            <p class="text-xs text-stone-500">{{ user.role === 'admin' ? t('userPanel.roleAdmin') : t('userPanel.roleUser') }}<span v-if="user.id === store.me?.id">{{ t('userPanel.thisIsYou') }}</span></p>
-          </div>
-          <div class="flex flex-wrap items-center gap-3">
-            <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: user.color }"></span>
-            <select class="paper-input rounded-xl px-3 py-2 text-sm" :value="user.role" :disabled="user.id === store.me?.id" @change="changeRole(user.id, ($event.target as HTMLSelectElement).value)">
-              <option value="user">{{ t('userPanel.roleUser') }}</option>
-              <option value="admin">{{ t('userPanel.roleAdmin') }}</option>
-            </select>
-            <button class="paper-button rounded-xl px-3 py-2 text-xs" type="button" @click="resetUserPassword(user.id, user.name)">{{ t('userPanel.setPassword') }}</button>
-          </div>
-        </div>
+      <div class="settings-profile-aside">
+        <section class="settings-surface settings-language"><Globe :size="23" :stroke-width="1.4" /><h3>{{ t('settings.language') }}</h3><p>{{ t('settings.languageHint') }}</p><LangSwitcher /><span class="settings-small-note">{{ t('settings.languageSaved') }}</span></section>
+        <section class="settings-archive-note"><span class="settings-eyebrow">{{ t('settings.atAGlance') }}</span><div><strong>{{ store.summary.totalEvents }}</strong><span>{{ t('common.entries') }}</span></div><div><strong>{{ store.summary.totalCategories }}</strong><span>{{ t('dashboard.statCategories') }}</span></div><span class="settings-archive-mark" aria-hidden="true">C.</span></section>
       </div>
     </div>
-  </section>
+
+    <div v-else-if="section === 'security'" class="settings-security-stack">
+      <form class="settings-surface" @submit.prevent="saveAccount">
+        <div class="settings-card-heading"><span class="settings-icon-tile"><KeyRound :size="21" :stroke-width="1.5" /></span><div><h3>{{ t('settings.passwordTitle') }}</h3><p>{{ t('userPanel.passwordChangeNote') }}</p></div></div>
+        <div class="settings-form-body settings-password-fields">
+          <label class="settings-field"><span>{{ t('userPanel.currentPassword') }}</span><input v-model="account.currentPassword" type="password" class="paper-input" autocomplete="current-password" required /></label>
+          <label class="settings-field"><span>{{ t('userPanel.newPassword') }}</span><input v-model="account.newPassword" type="password" class="paper-input" :placeholder="t('userPanel.placeholderNewPassword')" autocomplete="new-password" minlength="12" required /></label>
+          <label class="settings-field"><span>{{ t('login.labelPasswordConfirm') }}</span><input v-model="passwordConfirm" type="password" class="paper-input" autocomplete="new-password" minlength="12" required /></label>
+        </div>
+        <div class="settings-savebar"><span class="settings-small-note"><LockKeyhole :size="14" />{{ t('settings.passwordHint') }}</span><button class="ink-button settings-primary" type="submit" :disabled="savingAccount">{{ savingAccount ? t('common.saving') : t('settings.changePassword') }}</button></div>
+      </form>
+      <details class="settings-danger"><summary><span><TriangleAlert :size="18" />{{ t('settings.dangerTitle') }}</span><ChevronDown :size="16" /></summary><div><p>{{ t('settings.dangerNote') }}</p><button class="settings-danger-button" type="button" :disabled="deletingAccount" @click="removeAccount">{{ deletingAccount ? t('common.deleting') : t('userPanel.deleteAccount') }}<ArrowUpRight :size="15" /></button></div></details>
+    </div>
+
+    <div v-else-if="section === 'members' && store.isAdmin" class="settings-member-stack">
+      <section class="settings-surface settings-member-list">
+        <div class="settings-card-heading"><span class="settings-icon-tile"><Users :size="21" :stroke-width="1.5" /></span><div><h3>{{ t('settings.membersTitle') }}</h3><p>{{ t('settings.memberCount', { count: store.adminUsers.length }) }}</p></div></div>
+        <div v-for="user in store.adminUsers" :key="user.id" class="settings-member">
+          <span class="settings-member-avatar" :style="{ backgroundColor: user.color }">{{ user.name.charAt(0).toUpperCase() }}</span>
+          <div class="settings-member-name"><strong>{{ user.name }}<span v-if="user.id === store.me?.id">{{ t('settings.you') }}</span></strong><p>{{ user.email }}</p></div>
+          <div class="settings-member-actions"><select class="paper-input" :aria-label="t('settings.roleFor', { name: user.name })" :value="user.role" :disabled="user.id === store.me?.id" @change="changeRole(user.id, ($event.target as HTMLSelectElement).value)"><option value="user">{{ t('userPanel.roleUser') }}</option><option value="admin">{{ t('userPanel.roleAdmin') }}</option></select><button class="settings-key-button" type="button" :aria-label="t('settings.passwordFor', { name: user.name })" :title="t('userPanel.setPassword')" @click="resetUserPassword(user.id, user.name)"><KeyRound :size="17" /></button></div>
+        </div>
+      </section>
+      <details class="settings-surface settings-add-member"><summary><span><Plus :size="19" />{{ t('userPanel.createUser') }}</span><ChevronDown :size="17" /></summary>
+        <form class="settings-new-member-form" @submit.prevent="createUser">
+          <label class="settings-field"><span>{{ t('userPanel.name') }}</span><input v-model="newUser.name" class="paper-input" maxlength="60" required /></label>
+          <label class="settings-field"><span>{{ t('userPanel.email') }}</span><input v-model="newUser.email" type="email" class="paper-input" autocomplete="off" required /></label>
+          <label class="settings-field"><span>{{ t('userPanel.password') }}</span><input v-model="newUser.password" type="password" class="paper-input" minlength="12" autocomplete="new-password" required /></label>
+          <label class="settings-field"><span>{{ t('userPanel.role') }}</span><select v-model="newUser.role" class="paper-input"><option value="user">{{ t('userPanel.roleUser') }}</option><option value="admin">{{ t('userPanel.roleAdmin') }}</option></select></label>
+          <label class="settings-field"><span>{{ t('userPanel.color') }}</span><input v-model="newUser.color" type="color" class="paper-input h-12" /></label>
+          <div class="settings-new-member-submit"><button class="ink-button settings-primary" type="submit" :disabled="creatingUser"><Plus :size="16" />{{ creatingUser ? t('userPanel.creating') : t('userPanel.createUser') }}</button></div>
+        </form>
+      </details>
+      <p class="settings-small-note"><Shield :size="14" />{{ t('settings.adminHint') }}</p>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { ArrowUpRight, Check, ChevronDown, Globe, KeyRound, LockKeyhole, Mail, Palette, Plus, Shield, TriangleAlert, Users } from 'lucide-vue-next';
+import LangSwitcher from './LangSwitcher.vue';
 import { useRouter } from 'vue-router';
 import { translateApiError } from '../i18n';
 import { useLifelineStore } from '../stores/lifeline';
 import { useToastStore } from '../stores/toast';
 
+const props = defineProps<{ section: 'profile' | 'security' | 'members' }>();
 const { t } = useI18n();
+const passwordConfirm = ref('');
+const colors = [
+  { name: 'forest', value: '#36594a' }, { name: 'ochre', value: '#b18442' },
+  { name: 'terracotta', value: '#b4634f' }, { name: 'blue', value: '#527594' },
+  { name: 'violet', value: '#7c3aed' }, { name: 'charcoal', value: '#45423d' },
+];
 const store = useLifelineStore();
 const toast = useToastStore();
 const router = useRouter();
@@ -118,6 +92,8 @@ const account = reactive({
   currentPassword: '',
   newPassword: '',
 });
+
+const profileDirty = computed(() => account.name.trim() !== store.me?.name || account.color !== store.me?.color);
 
 const newUser = reactive({
   name: '',
@@ -134,25 +110,30 @@ watch(
     account.color = value?.color ?? '#7c3aed';
     account.currentPassword = '';
     account.newPassword = '';
+    passwordConfirm.value = '';
   },
   { immediate: true },
 );
 
 async function saveAccount() {
-  if (account.newPassword && account.newPassword.length < 12) {
+  if (savingAccount.value) return;
+  if (props.section === 'security' && account.newPassword !== passwordConfirm.value) {
+    toast.error(t('login.errorPasswordsDiffer'));
+    return;
+  }
+  if (props.section === 'security' && account.newPassword.length < 12) {
     toast.error(t('userPanel.errorPasswordTooShort'));
     return;
   }
   savingAccount.value = true;
   try {
-    await store.updateAccount({
-      name: account.name.trim(),
-      color: account.color,
-      currentPassword: account.currentPassword || undefined,
-      newPassword: account.newPassword || undefined,
-    });
+    await store.updateAccount(props.section === 'security' ? {
+      currentPassword: account.currentPassword,
+      newPassword: account.newPassword,
+    } : { name: account.name.trim(), color: account.color });
     account.currentPassword = '';
     account.newPassword = '';
+    passwordConfirm.value = '';
   } catch (error) {
     toast.error(translateApiError(error) || t('userPanel.errorAccountSave'));
   } finally {
