@@ -7,7 +7,6 @@
           {{ editingEvent ? t('eventForm.headingEdit', { title: editingEvent.title }) : t('eventForm.headingCreate') }}
         </h2>
       </div>
-      <button v-if="editingEvent" class="text-sm text-stone-500 underline decoration-dotted underline-offset-4" type="button" @click="reset">{{ t('eventForm.cancelEdit') }}</button>
     </div>
 
     <form class="grid gap-4" novalidate @submit.prevent="submit" @keydown.ctrl.enter.prevent="submit" @keydown.meta.enter.prevent="submit">
@@ -107,7 +106,7 @@ import { useToastStore } from '../stores/toast';
 import DateField from './DateField.vue';
 
 const props = defineProps<{ editingEvent?: LifeEvent | null }>();
-const emit = defineEmits<{ saved: []; cancel: []; busyChange: [busy: boolean] }>();
+const emit = defineEmits<{ saved: []; busyChange: [busy: boolean] }>();
 const { t } = useI18n();
 const store = useLifelineStore();
 const toast = useToastStore();
@@ -221,11 +220,6 @@ async function submit() {
   } finally {
     saving.value = false;
   }
-}
-
-function reset() {
-  loadFromEvent(null);
-  emit('cancel');
 }
 
 function handleCategoryKeydown(event: KeyboardEvent) {

@@ -9,26 +9,31 @@
       v-for="item in items"
       :key="item.value"
       :ref="(element) => setButtonRef(item.value, element)"
-      class="paper-nav-link relative z-10 min-w-0 rounded-xl px-2 py-2 text-xs font-medium leading-tight transition sm:px-4 sm:text-sm"
-      :class="{ 'is-active': item.value === modelValue }"
+      class="paper-nav-link relative z-10 min-w-0 rounded-xl px-2 py-2 text-xs font-medium leading-tight transition sm:text-sm"
+      :class="{ 'is-active': item.value === modelValue, 'sm:px-4': !item.icon }"
       type="button"
       :aria-label="item.label"
+      :title="item.icon ? item.label : undefined"
       :aria-current="item.value === modelValue ? 'page' : undefined"
       @click="$emit('update:modelValue', item.value)"
     >
-      <span v-if="item.shortLabel" class="sm:hidden">{{ item.shortLabel }}</span>
-      <span :class="item.shortLabel ? 'hidden sm:inline' : ''">{{ item.label }}</span>
+      <component :is="item.icon" v-if="item.icon" class="mx-auto h-4 w-4" aria-hidden="true" />
+      <template v-else>
+        <span v-if="item.shortLabel" class="sm:hidden">{{ item.shortLabel }}</span>
+        <span :class="item.shortLabel ? 'hidden sm:inline' : ''">{{ item.label }}</span>
+      </template>
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component, type ComponentPublicInstance } from 'vue';
 
 type SegmentedTabItem = {
   value: string;
   label: string;
   shortLabel?: string;
+  icon?: Component;
 };
 
 const props = defineProps<{
@@ -46,7 +51,7 @@ const buttonRefs = new Map<string, HTMLElement>();
 let resizeObserver: ResizeObserver | null = null;
 
 const navStyle = computed(() => ({
-  gridTemplateColumns: `repeat(${props.items.length || 1}, minmax(0, 1fr))`,
+  gridTemplateColumns: props.items.map((item) => item.icon ? '2.75rem' : 'minmax(0, 1fr)').join(' '),
 }));
 
 function setButtonRef(value: string, element: Element | ComponentPublicInstance | null) {

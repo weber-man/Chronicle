@@ -68,6 +68,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { Trash2 } from 'lucide-vue-next';
 import { useRoute, useRouter } from 'vue-router';
 import CommandPalette from './components/CommandPalette.vue';
 import SegmentedTabs from './components/SegmentedTabs.vue';
@@ -86,7 +87,7 @@ const navItems = computed(() => [
   { value: '/', label: t('app.nav.list') },
   { value: '/timeline', label: t('app.nav.timeline'), shortLabel: t('app.nav.timelineShort') },
   { value: '/insights', label: t('app.nav.insights'), shortLabel: t('app.nav.insightsShort') },
-  { value: '/trash', label: store.trashCount > 0 ? t('app.nav.trashCount', { count: store.trashCount }) : t('app.nav.trash'), shortLabel: t('app.nav.trashShort') },
+  { value: '/trash', label: store.trashCount > 0 ? t('app.nav.trashCount', { count: store.trashCount }) : t('app.nav.trash'), icon: Trash2 },
 ]);
 
 const activeNav = computed(() => (navItems.value.some((item) => item.value === route.path) ? route.path : '/'));

@@ -10,7 +10,7 @@
         <button v-for="option in methods" :key="option.value" type="button" class="rounded-xl px-4 py-2 text-sm font-medium disabled:opacity-50" :class="mode === option.value ? 'ink-button' : 'paper-button'" :aria-pressed="mode === option.value" :disabled="busy" @click="mode = option.value">{{ option.label }}</button>
       </div>
 
-      <EventForm v-show="mode === 'manual'" :editing-event="editingEvent" @saved="emit('close')" @cancel="close" @busy-change="busy = $event" />
+      <EventForm v-show="mode === 'manual'" :editing-event="editingEvent" @saved="emit('close')" @busy-change="busy = $event" />
       <div v-if="aiOpened" v-show="mode === 'ai'">
         <p v-if="loading" class="p-5 text-sm text-stone-500" role="status">{{ t('assistant.loadingSettings') }}</p>
         <div v-else-if="loadError" class="paper-subtle rounded-3xl p-5" role="alert">
