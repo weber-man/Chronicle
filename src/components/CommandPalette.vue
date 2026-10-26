@@ -127,7 +127,7 @@ const actions = computed<PaletteAction[]>(() => [
     icon: '+',
     shortcut: 'N',
     keywords: t('commandPalette.keywords.newEvent'),
-    run: () => router.push({ name: 'dashboard', hash: '#event-form' }),
+    run: () => router.push({ name: 'dashboard', query: { capture: 'manual' } }),
   },
   {
     id: 'timeline',
@@ -154,7 +154,7 @@ const actions = computed<PaletteAction[]>(() => [
     icon: '✦',
     shortcut: 'K',
     keywords: t('commandPalette.keywords.assistant'),
-    run: () => router.push({ name: 'assistant' }),
+    run: () => router.push({ name: 'dashboard', query: { capture: 'ai' } }),
   },
   {
     id: 'trash',
@@ -288,6 +288,7 @@ function userColor(userId: number) {
 }
 
 function onGlobalKeydown(event: KeyboardEvent) {
+  if (document.querySelector('dialog[open]')) return;
   if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase('en') === 'k') {
     event.preventDefault();
     model.value = !model.value;

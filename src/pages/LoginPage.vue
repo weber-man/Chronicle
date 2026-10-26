@@ -6,10 +6,6 @@
       <p class="mt-2 text-sm text-stone-500">{{ subline }}</p>
     </div>
 
-    <div class="mb-4 flex items-center justify-end">
-      <LangSwitcher />
-    </div>
-
     <SegmentedTabs class="mb-4" :items="tabItems" :model-value="activeTab" @update:model-value="switchMode($event as Mode)" />
 
     <form class="grid gap-4" @submit.prevent="submit">
@@ -72,7 +68,6 @@
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
-import LangSwitcher from '../components/LangSwitcher.vue';
 import SegmentedTabs from '../components/SegmentedTabs.vue';
 import { translateApiError } from '../i18n';
 import { useLifelineStore } from '../stores/lifeline';

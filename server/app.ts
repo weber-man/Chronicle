@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import {
   createAiModelCache,
@@ -99,6 +100,7 @@ export interface AppOptions {
   adminColor?: string;
   allowRegistration?: boolean;
   secureCookies?: boolean;
+  devAutoLogin?: boolean;
   corsOrigins?: string[];
   trustProxy?: boolean | number | string;
   backupDir?: string;
@@ -132,8 +134,9 @@ export function createApp(options: AppOptions = {}) {
   const jwtSecret = envSecret || readOrCreateJwtSecret(path.join(dbDir, '.jwt-secret'));
   assertStrongJwtSecret(jwtSecret);
   const usingGeneratedSecret = !envSecret;
-  const configuredAdminPassword = options.adminPassword ?? process.env.ADMIN_PASSWORD;
   const secureCookies = options.secureCookies ?? process.env.NODE_ENV === 'production';
+  const devAutoLogin = options.devAutoLogin === true && process.env.NODE_ENV === 'development' && !secureCookies;
+  const configuredAdminPassword = options.adminPassword || process.env.ADMIN_PASSWORD || (devAutoLogin ? randomBytes(32).toString('hex') : undefined);
   const allowRegistration = options.allowRegistration ?? process.env.ALLOW_REGISTRATION === 'true';
   const corsOrigins = options.corsOrigins ?? parseList(process.env.CORS_ORIGINS);
   const trustProxy = options.trustProxy ?? parseTrustProxy(process.env.TRUST_PROXY);
@@ -211,6 +214,7 @@ export function createApp(options: AppOptions = {}) {
     latestSchemaVersion,
     migrationBackup: migration.backupPath,
     environment: process.env.NODE_ENV ?? 'development',
+    devAutoLogin,
     allowRegistration,
     jwtSecretSource: usingGeneratedSecret ? 'persisted-local-file' : 'environment',
     frontendBundled: fs.existsSync(clientIndexPath),
@@ -348,7 +352,19 @@ export function createApp(options: AppOptions = {}) {
     return res.json({ ok: true, message: 'Password was reset. Please sign in again.' });
   });
 
-  app.get('/api/auth/me', requireAuth, (req, res) => {
+  app.get('/api/auth/me', (req, res, next) => {
+    if (devAutoLogin && !req.auth && isLocalDevelopmentRequest(req)) {
+      const configured = getUserRowByEmail(db, options.adminEmail ?? process.env.ADMIN_EMAIL ?? '');
+      const admin = configured?.role === 'admin' ? configured : db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").get() as { id: number } | undefined;
+      const session = admin ? getUserSession(db, admin.id) : null;
+      if (session) {
+        req.auth = session.user;
+        req.authSessionVersion = session.sessionVersion;
+        attachAuthCookies(res, { ...session.user, sessionVersion: session.sessionVersion }, jwtSecret, false);
+      }
+    }
+    next();
+  }, requireAuth, (req, res) => {
     res.json({ user: req.auth });
   });
 
@@ -719,6 +735,20 @@ export function createApp(options: AppOptions = {}) {
 
 function defaultDbPath() {
   return path.join(process.cwd(), 'data', 'lifeline.sqlite');
+}
+
+function isLocalDevelopmentRequest(req: express.Request) {
+  const loopback = new Set(['localhost', '127.0.0.1', '[::1]']);
+  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '')) return false;
+  try {
+    if (!loopback.has(new URL(`http://${req.get('host')}`).hostname)) return false;
+    const origin = req.get('origin');
+    if (origin && !loopback.has(new URL(origin).hostname)) return false;
+    // Explicitly cross-site browser requests must not create a local session.
+    return req.get('sec-fetch-site') !== 'cross-site';
+  } catch {
+    return false;
+  }
 }
 
 function parseId(value: string | string[]) {

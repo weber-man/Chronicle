@@ -21,7 +21,7 @@ The UI is fully localized in English and German (via `vue-i18n`). A language swi
 
 ```bash
 cp .env.example .env
-# Set ADMIN_PASSWORD in .env (at least 12 characters, no known default)
+# For production, set ADMIN_PASSWORD (at least 12 characters, no known default)
 npm install
 npm run dev
 ```
@@ -29,7 +29,9 @@ npm run dev
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:3001`
 
-The SQLite file lives at `data/lifeline.sqlite` by default. The server loads `.env` automatically on start. `ADMIN_PASSWORD` is required on the first start; there is no known default admin anymore. If an existing database still contains the old default admin, the server replaces it on start using `ADMIN_PASSWORD` and invalidates all old sessions. Without `ADMIN_PASSWORD` it refuses to start.
+With `npm run dev`, localhost automatically signs you in as the configured administrator, or the first existing administrator if the configured email does not exist. No password entry is needed. The development backend binds to `127.0.0.1`; automatic login only accepts loopback requests in `NODE_ENV=development`. It issues normal session and CSRF cookies. `npm start` and production mode never enable automatic login.
+
+The SQLite file lives at `data/lifeline.sqlite` by default. The server loads `.env` automatically on start. For a fresh local development database, a random admin password is generated if none is set. Outside development auto-login, `ADMIN_PASSWORD` is required on the first start; there is no known default admin anymore. If an existing database still contains the old default admin, the server replaces it on start using `ADMIN_PASSWORD` and invalidates all old sessions. Without `ADMIN_PASSWORD` it refuses to start outside development auto-login.
 
 ## Tests and build
 
@@ -64,7 +66,7 @@ Import is deliberately **merge-only**: existing data is never replaced. Events w
 
 ## AI assistant (OpenRouter)
 
-Under **AI** each user can store their own OpenRouter API key and choose a model from the OpenRouter model list.
+Under **Account settings** each user can store their own OpenRouter API key and choose a model from the OpenRouter model list. On the list page, **Capture** opens an overlay for manual entry or AI-assisted creation. Existing events are edited in the same overlay.
 
 - The key is stored AES-256-GCM encrypted in the `ai_settings` table. The key for that is derived from `JWT_SECRET`. If `JWT_SECRET` changes, the OpenRouter key must be re-entered; the app points this out.
 - The key is never returned to the browser in plain text, only as a masked hint (last four characters).

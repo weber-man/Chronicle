@@ -107,12 +107,13 @@ import { useToastStore } from '../stores/toast';
 import DateField from './DateField.vue';
 
 const props = defineProps<{ editingEvent?: LifeEvent | null }>();
-const emit = defineEmits<{ saved: []; cancel: [] }>();
+const emit = defineEmits<{ saved: []; cancel: []; busyChange: [busy: boolean] }>();
 const { t } = useI18n();
 const store = useLifelineStore();
 const toast = useToastStore();
 const sectionRef = ref<HTMLElement | null>(null);
 const saving = ref(false);
+watch(saving, (value) => emit('busyChange', value));
 const error = ref('');
 const fieldError = ref('');
 const hasEndDate = ref(false);
@@ -211,7 +212,7 @@ async function submit() {
 
   try {
     await store.saveEvent(payload, props.editingEvent?.id);
-    reset();
+    loadFromEvent(null);
     emit('saved');
   } catch (err) {
     error.value = translateApiError(err) || t('eventForm.errorSaveFailed');

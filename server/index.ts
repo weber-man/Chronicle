@@ -8,7 +8,10 @@ try {
 }
 
 const port = Number(process.env.PORT ?? 3001);
-const { app, db, schemaVersion } = createApp();
+const requestedDevLogin = process.argv.includes('--dev-auto-login');
+if (requestedDevLogin && !process.env.NODE_ENV) process.env.NODE_ENV = 'development';
+const devAutoLogin = requestedDevLogin && process.env.NODE_ENV === 'development';
+const { app, db, schemaVersion } = createApp({ devAutoLogin });
 
 logInfo('startup.server_initializing', {
   port,
@@ -16,12 +19,13 @@ logInfo('startup.server_initializing', {
   schemaVersion,
 });
 
-const server = app.listen(port, () => {
+const onListening = () => {
   logInfo('startup.server_listening', {
     port,
     url: `http://localhost:${port}`,
   });
-});
+};
+const server = devAutoLogin ? app.listen(port, '127.0.0.1', onListening) : app.listen(port, onListening);
 
 let shuttingDown = false;
 

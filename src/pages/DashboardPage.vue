@@ -7,7 +7,11 @@
       <StatCard :label="t('dashboard.statTrash')" :value="store.summary.trashEvents" :hint="t('dashboard.statTrashHint')" />
     </div>
 
-    <EventForm ref="eventFormRef" :editing-event="editingEvent" @saved="editingEvent = null" @cancel="editingEvent = null" />
+    <div class="flex justify-end">
+      <button class="ink-button rounded-2xl px-5 py-3 font-medium" type="button" @click="openEditor('manual')">+ {{ t('eventForm.modeCreate') }}</button>
+    </div>
+
+    <EventEditorOverlay v-if="editorOpen" :editing-event="editingEvent" :initial-mode="editorMode" @close="closeEditor" />
 
     <EventList
       :events="store.events"
@@ -25,10 +29,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
-import EventForm from '../components/EventForm.vue';
+import EventEditorOverlay from '../components/EventEditorOverlay.vue';
 import EventList from '../components/EventList.vue';
 import StatCard from '../components/StatCard.vue';
 import { translateApiError } from '../i18n';
@@ -42,7 +46,17 @@ const toast = useToastStore();
 const route = useRoute();
 const router = useRouter();
 const editingEvent = ref<LifeEvent | null>(null);
-const eventFormRef = ref<InstanceType<typeof EventForm> | null>(null);
+const editorOpen = ref(false);
+const editorMode = ref<'manual' | 'ai'>('manual');
+
+watch([() => route.query.capture, () => route.hash], ([capture, hash], previous) => {
+  if (capture === 'ai') openEditor('ai');
+  else if (capture === 'manual' || hash === '#event-form') openEditor('manual');
+  else if (previous?.[0] || previous?.[1] === '#event-form') {
+    editorOpen.value = false;
+    editingEvent.value = null;
+  }
+}, { immediate: true });
 
 const rangeLabel = computed(() => (store.summary.totalEvents ? store.summary.rangeLabel : t('common.nothingYet')));
 
@@ -95,9 +109,25 @@ async function removeEvent(event: LifeEvent) {
   }
 }
 
-async function startEditing(event: LifeEvent) {
+function openEditor(mode: 'manual' | 'ai') {
+  editingEvent.value = null;
+  editorMode.value = mode;
+  editorOpen.value = true;
+}
+
+async function closeEditor() {
+  editorOpen.value = false;
+  editingEvent.value = null;
+  if (route.query.capture || route.hash === '#event-form') {
+    const query = { ...route.query };
+    delete query.capture;
+    await router.replace({ query, hash: route.hash === '#event-form' ? '' : route.hash });
+  }
+}
+
+function startEditing(event: LifeEvent) {
   editingEvent.value = event;
-  await nextTick();
-  document.getElementById('event-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  editorMode.value = 'manual';
+  editorOpen.value = true;
 }
 </script>

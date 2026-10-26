@@ -5,9 +5,9 @@
   "type": "module",
   "description": "A modern life timeline app with Vue, TypeScript, Tailwind and a small SQLite backend.",
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev": "concurrently --kill-others-on-fail \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite",
-    "dev:server": "tsx watch server/index.ts",
+    "dev:server": "tsx watch server/index.ts --dev-auto-login",
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build",
     "build:server": "tsc -p tsconfig.server.json",

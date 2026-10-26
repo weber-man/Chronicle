@@ -60,7 +60,7 @@ export const useAiStore = defineStore('ai', () => {
   function prefetchModels() {
     if (models.value.length || modelsPromise) return;
     void loadModels().catch(() => {
-      // Prefetching is best effort; the assistant page retries when opened.
+      // Prefetching is best effort; account settings retry when opened.
     });
   }
 

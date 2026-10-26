@@ -5,10 +5,12 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     port: 5173,
+    strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
+        target: 'http://127.0.0.1:3001',
+        // Preserve the browser host so the backend can validate CSRF origins.
+        changeOrigin: false,
       },
     },
   },

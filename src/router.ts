@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { i18n } from './i18n';
 import AccountPage from './pages/AccountPage.vue';
-import AssistantPage from './pages/AssistantPage.vue';
 import DashboardPage from './pages/DashboardPage.vue';
 import InsightsPage from './pages/InsightsPage.vue';
 import LoginPage from './pages/LoginPage.vue';
@@ -14,7 +13,6 @@ function pageTitleKey(name: string) {
     case 'dashboard': return 'app.nav.list';
     case 'timeline': return 'app.nav.timeline';
     case 'insights': return 'app.nav.insights';
-    case 'assistant': return 'app.nav.ai';
     case 'trash': return 'app.nav.trash';
     case 'account': return 'account.heading';
     case 'login': return 'login.headingLogin';
@@ -36,7 +34,7 @@ const router = createRouter({
     { path: '/', name: 'dashboard', component: DashboardPage },
     { path: '/timeline', name: 'timeline', component: TimelinePage },
     { path: '/insights', name: 'insights', component: InsightsPage },
-    { path: '/assistant', name: 'assistant', component: AssistantPage },
+    { path: '/assistant', name: 'assistant', redirect: { name: 'dashboard', query: { capture: 'ai' } } },
     { path: '/trash', name: 'trash', component: TrashPage },
     { path: '/account', name: 'account', component: AccountPage },
     { path: '/login', name: 'login', component: LoginPage },
@@ -44,6 +42,7 @@ const router = createRouter({
   ],
   scrollBehavior(to, _from, savedPosition) {
     if (savedPosition) return savedPosition;
+    if (to.hash === '#event-form') return;
     if (to.hash) return { el: to.hash, behavior: 'smooth' };
     return { top: 0 };
   },

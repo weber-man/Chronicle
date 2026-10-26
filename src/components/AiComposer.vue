@@ -142,7 +142,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { numericValue } from '../lib/date';
 import { translateApiError } from '../i18n';
@@ -168,6 +168,7 @@ type EditableDraft = {
   isOngoing: boolean;
 };
 
+const emit = defineEmits<{ saved: []; busyChange: [busy: boolean] }>();
 const { t } = useI18n();
 const store = useAiStore();
 const lifeline = useLifelineStore();
@@ -182,6 +183,7 @@ const revising = ref(false);
 const saving = ref(false);
 const error = ref('');
 const busy = computed(() => generating.value || revising.value || saving.value);
+watch(busy, (value) => emit('busyChange', value));
 
 function today(): TimelineDate {
   const now = new Date();
@@ -250,6 +252,7 @@ async function save() {
     instruction.value = '';
     revisionCount.value = 0;
     generatedModel.value = '';
+    emit('saved');
   } catch (err) {
     error.value = translateApiError(err) || t('aiComposer.errorSaveFailed');
     toast.error(error.value);

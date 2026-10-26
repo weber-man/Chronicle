@@ -13,7 +13,6 @@
 
         <div class="flex flex-col items-stretch gap-3 sm:items-end">
           <div class="flex flex-wrap items-center justify-end gap-2">
-            <LangSwitcher />
             <button
               class="search-button group inline-flex h-12 items-center gap-2.5 rounded-2xl px-3 text-left"
               type="button"
@@ -50,7 +49,7 @@
         <div v-if="!store.authReady" class="paper-panel panel-reveal rounded-[2rem] p-8 text-center text-stone-500">{{ t('app.loading') }}</div>
         <RouterView v-else v-slot="{ Component, route: currentRoute }">
           <Transition name="route-fade" mode="out-in">
-            <component :is="Component" :key="currentRoute.fullPath" />
+            <component :is="Component" :key="currentRoute.path" />
           </Transition>
         </RouterView>
       </main>
@@ -71,7 +70,6 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import CommandPalette from './components/CommandPalette.vue';
-import LangSwitcher from './components/LangSwitcher.vue';
 import SegmentedTabs from './components/SegmentedTabs.vue';
 import ToastStack from './components/ToastStack.vue';
 import { useAiStore } from './stores/ai';
@@ -88,7 +86,6 @@ const navItems = computed(() => [
   { value: '/', label: t('app.nav.list') },
   { value: '/timeline', label: t('app.nav.timeline'), shortLabel: t('app.nav.timelineShort') },
   { value: '/insights', label: t('app.nav.insights'), shortLabel: t('app.nav.insightsShort') },
-  { value: '/assistant', label: t('app.nav.ai') },
   { value: '/trash', label: store.trashCount > 0 ? t('app.nav.trashCount', { count: store.trashCount }) : t('app.nav.trash'), shortLabel: t('app.nav.trashShort') },
 ]);
 
