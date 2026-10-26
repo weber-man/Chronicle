@@ -7,7 +7,10 @@
       <StatCard :label="t('dashboard.statTrash')" :value="store.summary.trashEvents" :hint="t('dashboard.statTrashHint')" />
     </div>
 
-    <div class="flex justify-end">
+    <div class="flex flex-wrap justify-end gap-3">
+      <button v-if="isDevelopment" class="paper-button rounded-2xl px-5 py-3 text-sm font-medium disabled:opacity-60" type="button" :disabled="creatingDemoEvents" @click="createDemoEvents">
+        {{ creatingDemoEvents ? t('dashboard.creatingDemoEvents') : t('dashboard.createDemoEvents') }}
+      </button>
       <button class="ink-button rounded-2xl px-5 py-3 font-medium" type="button" @click="openEditor('manual')">+ {{ t('eventForm.modeCreate') }}</button>
     </div>
 
@@ -48,6 +51,23 @@ const router = useRouter();
 const editingEvent = ref<LifeEvent | null>(null);
 const editorOpen = ref(false);
 const editorMode = ref<'manual' | 'ai'>('manual');
+const isDevelopment = import.meta.env.DEV && import.meta.env.MODE === 'development';
+const creatingDemoEvents = ref(false);
+
+async function createDemoEvents() {
+  if (isDevelopment) {
+    if (creatingDemoEvents.value) return;
+    creatingDemoEvents.value = true;
+    try {
+      const { createRandomEvents } = await import('../lib/dev-events');
+      await store.importData({ events: createRandomEvents() });
+    } catch (error) {
+      toast.error(translateApiError(error) || t('dashboard.demoEventsFailed'));
+    } finally {
+      creatingDemoEvents.value = false;
+    }
+  }
+}
 
 watch([() => route.query.capture, () => route.hash], ([capture, hash], previous) => {
   if (capture === 'ai') openEditor('ai');

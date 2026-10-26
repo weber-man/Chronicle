@@ -1,18 +1,16 @@
 <template>
-  <div class="app-shell min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,248,228,0.42),_transparent_32%),linear-gradient(180deg,rgba(247,235,208,0.62)_0%,rgba(225,208,175,0.56)_55%,rgba(211,191,151,0.62)_100%)] text-stone-800">
+  <div class="app-shell min-h-screen text-stone-800" :class="{ 'timeline-app': route.name === 'timeline' }">
     <a class="skip-link" href="#main-content">{{ t('app.skipToContent') }}</a>
-    <div class="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8" :class="{ 'account-shell-layout': route.name === 'account' }">
+    <div class="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8" :class="{ 'account-shell-layout': route.name === 'account', 'timeline-app-layout': route.name === 'timeline' }">
       <header v-if="store.isAuthenticated && route.name !== 'account'" class="paper-panel hero-panel mb-6 flex flex-col gap-4 rounded-[2rem] p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p class="paper-chip mb-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-amber-900">
+        <div class="hero-identity">
+          <p class="paper-chip inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-amber-900">
             Chronicles
           </p>
-          <h1 class="paper-heading text-3xl font-semibold tracking-tight text-stone-900">{{ t('app.tagline') }}</h1>
-          <p class="mt-2 text-sm text-stone-500">{{ store.me?.name }} · {{ store.me?.email }}<span v-if="store.isAdmin"> · {{ t('common.admin') }}</span></p>
         </div>
 
-        <div class="flex flex-col items-stretch gap-3 sm:items-end">
-          <div class="flex flex-wrap items-center justify-end gap-2">
+        <div class="hero-actions flex flex-col items-stretch gap-3 sm:items-end">
+          <div class="hero-quick-actions flex flex-wrap items-center justify-end gap-2">
             <button
               class="search-button group inline-flex h-12 items-center gap-2.5 rounded-2xl px-3 text-left"
               type="button"
@@ -25,27 +23,27 @@
                   <path d="m15.4 15.4 4.1 4.1" />
                 </svg>
               </span>
-              <span class="min-w-0">
+              <span class="search-button-label min-w-0">
                 <span class="block text-xs text-stone-500">{{ t('app.quickSearch') }}</span>
                 <span class="block text-sm font-medium leading-5 text-stone-900">{{ t('app.searchLabel') }}</span>
               </span>
               <kbd class="ml-1 hidden rounded-lg border border-amber-900/15 bg-white/55 px-1.5 py-1 text-[10px] font-medium text-stone-500 lg:inline-flex">⌘ K</kbd>
             </button>
-            <button
-              class="account-button h-12 w-12 shrink-0 justify-center rounded-2xl p-0"
-              type="button"
-              :aria-label="t('app.ariaOpenAccount', { name: store.me?.name ?? t('common.unknown') })"
-              :title="t('app.openAccountTitle', { name: store.me?.name ?? t('common.unknown') })"
-              @click="openAccount"
-            >
-              <span class="account-avatar" :style="{ backgroundColor: store.me?.color ?? '#7c3aed' }">{{ accountInitial }}</span>
-            </button>
           </div>
           <SegmentedTabs :items="navItems" :model-value="activeNav" @update:model-value="openSection" />
+          <button
+            class="account-button h-12 w-12 shrink-0 justify-center rounded-2xl p-0"
+            type="button"
+            :aria-label="t('app.ariaOpenAccount', { name: store.me?.name ?? t('common.unknown') })"
+            :title="t('app.openAccountTitle', { name: store.me?.name ?? t('common.unknown') })"
+            @click="openAccount"
+          >
+            <span class="account-avatar" :style="{ backgroundColor: store.me?.color ?? '#7c3aed' }">{{ accountInitial }}</span>
+          </button>
         </div>
       </header>
 
-      <main id="main-content" class="flex-1" :class="{ 'account-main': route.name === 'account' }">
+      <main id="main-content" class="flex-1" :class="{ 'account-main': route.name === 'account', 'timeline-main': route.name === 'timeline' }">
         <div v-if="!store.authReady" class="paper-panel panel-reveal rounded-[2rem] p-8 text-center text-stone-500">{{ t('app.loading') }}</div>
         <RouterView v-else v-slot="{ Component, route: currentRoute }">
           <Transition name="route-fade" mode="out-in">
