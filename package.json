@@ -31,7 +31,7 @@
   },
   "devDependencies": {
     "@sparticuz/chromium": "^149.0.0",
-    "@tailwindcss/postcss": "^4.1.8",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
