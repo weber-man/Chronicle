@@ -657,10 +657,15 @@ export function createApp(options: AppOptions = {}) {
       setHeaders: (res, filePath) => {
         if (filePath.includes(`${path.sep}assets${path.sep}`)) {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+          // index.html must never be cached so deployments cannot serve stale
+          // HTML that references asset hashes missing from the current image.
+          res.setHeader('Cache-Control', 'no-store');
         }
       },
     }));
     app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
       res.sendFile(clientIndexPath);
     });
   }
