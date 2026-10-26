@@ -143,19 +143,22 @@ body::after {
 .interactive-lift,
 .paper-button,
 .account-button,
+.search-button,
 .paper-nav-link {
   transition: transform 180ms var(--ease-soft-spring), box-shadow 220ms ease, background-color 220ms ease, border-color 220ms ease, color 220ms ease, filter 220ms ease;
 }
 
 .interactive-lift:hover,
 .paper-button:hover,
-.account-button:hover {
+.account-button:hover,
+.search-button:hover {
   transform: translateY(-1px);
 }
 
 .interactive-lift:active,
 .paper-button:active,
 .account-button:active,
+.search-button:active,
 .paper-nav-link:active {
   transform: translateY(1px) scale(0.99);
 }
@@ -260,6 +263,19 @@ button:disabled,
   border: 1px solid rgba(136, 102, 56, 0.2);
   box-shadow: 0 8px 16px rgba(103, 74, 35, 0.14);
   animation: soft-glow 4.8s ease-in-out infinite;
+  will-change: transform, width, height;
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paper-nav-indicator {
+    animation: none;
+    transition: none;
+  }
 }
 
 .paper-nav-link {
@@ -289,7 +305,8 @@ button:disabled,
   color: #2f2418;
 }
 
-.account-button {
+.account-button,
+.search-button {
   min-width: 0;
   display: inline-flex;
   align-items: center;
@@ -302,9 +319,45 @@ button:disabled,
 }
 
 .account-button:hover,
-.account-button.is-active {
+.account-button.is-active,
+.search-button:hover {
   background: rgba(255, 252, 244, 0.98);
   border-color: rgba(122, 77, 34, 0.3);
+}
+
+.search-button {
+  gap: 0.625rem;
+}
+
+.search-button-icon {
+  background: rgba(120, 84, 45, 0.1);
+  border: 1px solid rgba(136, 102, 56, 0.16);
+  color: #5d452e;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  transition: transform 220ms var(--ease-soft-spring), background-color 220ms ease;
+}
+
+.search-button:hover .search-button-icon {
+  background: rgba(120, 84, 45, 0.15);
+  transform: scale(1.08) rotate(-4deg);
+}
+
+.ai-orbit {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 14px 30px rgba(103, 74, 35, 0.12);
+  animation: ai-orbit-float 6.5s ease-in-out infinite;
+}
+
+@keyframes ai-orbit-float {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-4px) rotate(2deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-orbit {
+    animation: none;
+  }
 }
 
 .account-avatar {
@@ -403,6 +456,76 @@ select {
 .route-fade-leave-to {
   opacity: 0;
   transform: translate3d(0, 14px, 0);
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  transform: translateY(-200%);
+  border-radius: 0.9rem;
+  background: #4c3624;
+  color: #fbf4e2;
+  padding: 0.65rem 1rem;
+  font-size: 0.85rem;
+  transition: transform 180ms var(--ease-soft-spring);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.palette-overlay {
+  background: rgba(48, 33, 20, 0.42);
+  backdrop-filter: blur(4px);
+}
+
+.palette-panel {
+  animation: fade-up 220ms var(--ease-soft-spring) both;
+}
+
+.palette-enter-active,
+.palette-leave-active {
+  transition: opacity 180ms ease;
+}
+
+.palette-enter-from,
+.palette-leave-to {
+  opacity: 0;
+}
+
+.palette-item {
+  transition: background-color 140ms ease, color 140ms ease, transform 140ms var(--ease-soft-spring);
+}
+
+.palette-item:hover,
+.palette-item.is-selected {
+  background: linear-gradient(180deg, rgba(255, 251, 241, 0.96), rgba(242, 228, 196, 0.9));
+  box-shadow: 0 8px 18px rgba(103, 74, 35, 0.12);
+  transform: translateX(2px);
+}
+
+.insight-tile {
+  transition: transform 220ms var(--ease-soft-spring), box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.insight-tile:hover {
+  transform: translateY(-2px);
+  border-color: rgba(122, 77, 34, 0.3);
+  box-shadow: 0 12px 26px rgba(103, 74, 35, 0.1);
+}
+
+.toast-item-enter-active,
+.toast-item-leave-active,
+.toast-item-move {
+  transition: opacity 220ms ease, transform 260ms var(--ease-soft-spring);
+}
+
+.toast-item-enter-from,
+.toast-item-leave-to {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0) scale(0.98);
 }
 
 @media (prefers-reduced-motion: reduce) {

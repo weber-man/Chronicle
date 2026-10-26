@@ -19,6 +19,7 @@ export interface User {
 
 export interface AuthConfig {
   allowRegistration: boolean;
+  version?: string;
 }
 
 export interface LifeEvent {
@@ -30,6 +31,7 @@ export interface LifeEvent {
   startDate: TimelineDate;
   endDate: TimelineDate | null;
   isOngoing: boolean;
+  deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   sortStart: string;
@@ -41,6 +43,126 @@ export interface Summary {
   totalEvents: number;
   rangeLabel: string;
   ongoingEvents: number;
+  totalCategories: number;
+  trashEvents: number;
+}
+
+export type EventSort =
+  | 'start-asc'
+  | 'start-desc'
+  | 'duration-desc'
+  | 'title-asc'
+  | 'updated-desc'
+  | 'deleted-desc';
+
+export type EventTypeFilter = 'all' | 'points' | 'ranges' | 'ongoing';
+
+export interface EventQuery {
+  search?: string;
+  category?: string;
+  type?: EventTypeFilter;
+  sort?: EventSort;
+  page?: number;
+  pageSize?: number;
+  trash?: boolean;
+}
+
+export interface Pagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface CategoryFacet {
+  name: string;
+  count: number;
+}
+
+export interface EventFacets {
+  categories: CategoryFacet[];
+}
+
+export interface EventListResponse {
+  events: LifeEvent[];
+  summary: Summary;
+  facets: EventFacets;
+  pagination: Pagination;
+}
+
+export interface InsightsEvent {
+  id: number;
+  title: string;
+  date: TimelineDate;
+}
+
+export interface Insights {
+  totalEvents: number;
+  ongoingEvents: number;
+  trashEvents: number;
+  rangeLabel: string;
+  fromYear: number | null;
+  toYear: number | null;
+  coverageYears: number;
+  coveredDays: number;
+  averageDurationDays: number;
+  firstEvent: InsightsEvent | null;
+  lastEvent: InsightsEvent | null;
+  longestEvent: { id: number; title: string; days: number } | null;
+  busiestYear: { year: number; count: number } | null;
+  perYear: Array<{ year: number; count: number }>;
+  categories: CategoryFacet[];
+}
+
+export interface AiSettings {
+  configured: boolean;
+  model: string;
+  keyHint: string | null;
+  needsReentry: boolean;
+}
+
+export interface AiModel {
+  id: string;
+  name: string;
+  contextLength: number | null;
+}
+
+export interface AiModelsResponse {
+  models: AiModel[];
+  source: 'openrouter' | 'fallback';
+}
+
+export interface AiDraftInput {
+  title: string;
+  description: string;
+  category: string;
+  startDate: TimelineDate;
+  endDate: TimelineDate | null;
+  isOngoing: boolean;
+}
+
+export interface AiDraftResult {
+  draft: AiDraftInput;
+  model: string;
+}
+
+export interface ExportPayload {
+  format: string;
+  version: number;
+  exportedAt: string;
+  events: Array<Record<string, unknown>>;
+}
+
+export interface ImportResult {
+  ok: true;
+  imported: number;
+  skipped: number;
+  total: number;
+}
+
+export interface EmptyTrashResult {
+  ok: true;
+  removed: number;
 }
 
 function uniqueCategories(entries: string[]) {

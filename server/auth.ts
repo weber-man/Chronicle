@@ -11,6 +11,11 @@ export interface AuthUserToken {
   sub: string;
   role: 'admin' | 'user';
   type: 'access';
+  /**
+   * Incremented whenever credentials or permissions change. Tokens without a
+   * version are treated as version 0 so existing sessions survive an upgrade.
+   */
+  ver?: number;
 }
 
 export function hashPassword(password: string) {

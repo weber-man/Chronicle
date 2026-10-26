@@ -4,7 +4,81 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
-import { createCsrfToken, createResetToken, hashPassword, hashResetToken, signAccessToken, tokenTtlSeconds, verifyAccessToken, verifyPassword } from './auth.js';
+import {
+  createAiModelCache,
+  deleteAiSettings,
+  generateAiDraft,
+  getAiSettings,
+  listAiModels,
+  reviseAiDraft,
+  saveAiSettings,
+} from './ai.js';
+import { createResetToken, hashPassword, hashResetToken, verifyPassword } from './auth.js';
+import { HttpError } from './errors.js';
+import {
+  createEvent,
+  emptyTrash,
+  exportUserData,
+  getEventById,
+  getFacets,
+  getInsights,
+  getSummary,
+  importEvents,
+  listEvents,
+  purgeEvent,
+  restoreEvent,
+  softDeleteEvent,
+  updateEvent,
+} from './events.js';
+import {
+  attachAuthCookies,
+  clearAuthCookies,
+  createAuthMiddleware,
+  createRateLimiter,
+  logError,
+  logInfo,
+  logWarn,
+  parseTrustProxy,
+  requestContext,
+  requestMeta,
+  requireAdmin,
+  requireAuth,
+  requireCsrfForWrites,
+  securityHeaders,
+  readOrCreateJwtSecret,
+} from './http.js';
+import { backupDatabase, getSchemaVersion, latestSchemaVersion, runMigrations } from './migrations.js';
+import {
+  adminUpdateUserSchema,
+  aiGenerateSchema,
+  aiReviseSchema,
+  aiSettingsSchema,
+  createUserSchema,
+  deleteAccountSchema,
+  eventInputSchema,
+  eventQuerySchema,
+  importPayloadSchema,
+  loginSchema,
+  passwordResetConfirmSchema,
+  passwordResetRequestSchema,
+  registerSchema,
+  updateAccountSchema,
+} from './schemas.js';
+import {
+  activeUserCount,
+  adminCount,
+  bootstrapAdmin,
+  createUser,
+  deleteUser,
+  ensureUniqueEmail,
+  getUserById,
+  getUserRowByEmail,
+  getUserRowById,
+  getUserSession,
+  listUsers,
+  sanitizeUser,
+  updateUserDetails,
+} from './users.js';
 
 export interface AppOptions {
   dbPath?: string;
@@ -15,167 +89,132 @@ export interface AppOptions {
   adminColor?: string;
   allowRegistration?: boolean;
   secureCookies?: boolean;
+  corsOrigins?: string[];
+  trustProxy?: boolean | number | string;
+  backupDir?: string;
+  logRequests?: boolean;
+  openRouterBaseUrl?: string;
+  fetchImpl?: typeof fetch;
 }
 
-type Role = 'admin' | 'user';
-
-type TimelineDate = {
-  precision: 'year' | 'month' | 'day';
-  year: number;
-  month?: number | null;
-  day?: number | null;
-};
-
-type SanitizedUser = {
-  id: number;
-  name: string;
-  color: string;
-  email: string;
-  role: Role;
-  createdAt: string;
-};
-
-const timelineDateSchema = z.object({
-  precision: z.enum(['year', 'month', 'day']),
-  year: z.number().int().min(0).max(9999),
-  month: z.number().int().min(1).max(12).nullable().optional(),
-  day: z.number().int().min(1).max(31).nullable().optional(),
-}).superRefine((value, ctx) => {
-  if (value.precision !== 'year' && !value.month) {
-    ctx.addIssue({ code: 'custom', path: ['month'], message: 'Monat fehlt.' });
-  }
-  if (value.precision === 'day' && !value.day) {
-    ctx.addIssue({ code: 'custom', path: ['day'], message: 'Tag fehlt.' });
-  }
-});
-
-const eventSchema = z.object({
-  title: z.string().trim().min(1).max(120),
-  description: z.string().trim().max(1000).default(''),
-  category: z.string().trim().min(1).max(200).default('Alltag'),
-  startDate: timelineDateSchema,
-  endDate: timelineDateSchema.nullable(),
-  isOngoing: z.boolean().default(false),
-});
-
-const loginSchema = z.object({
-  email: z.string().trim().email(),
-  password: z.string().min(8).max(200),
-});
-
-const registerSchema = z.object({
-  name: z.string().trim().min(1).max(60),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  email: z.string().trim().email(),
-  password: z.string().min(12).max(200),
-});
-
-const createUserSchema = registerSchema.extend({
-  role: z.enum(['admin', 'user']).default('user'),
-});
-
-const updateAccountSchema = z.object({
-  name: z.string().trim().min(1).max(60).optional(),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-  currentPassword: z.string().min(8).max(200).optional(),
-  newPassword: z.string().min(12).max(200).optional(),
-}).superRefine((value, ctx) => {
-  if (value.newPassword && !value.currentPassword) {
-    ctx.addIssue({ code: 'custom', path: ['currentPassword'], message: 'Aktuelles Passwort fehlt.' });
-  }
-});
-
-const deleteAccountSchema = z.object({
-  password: z.string().min(8).max(200),
-});
-
-const adminUpdateUserSchema = z.object({
-  name: z.string().trim().min(1).max(60).optional(),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-  role: z.enum(['admin', 'user']).optional(),
-  password: z.string().min(12).max(200).optional(),
-});
-
-const passwordResetRequestSchema = z.object({
-  email: z.string().trim().email(),
-});
-
-const passwordResetConfirmSchema = z.object({
-  token: z.string().trim().min(32).max(256),
-  password: z.string().min(12).max(200),
-});
-
-declare global {
-  namespace Express {
-    interface Request {
-      auth?: SanitizedUser;
-    }
-  }
-}
-
-const AUTH_COOKIE = 'lifeline_auth';
-const CSRF_COOKIE = 'lifeline_csrf';
+const APP_VERSION = process.env.APP_VERSION ?? '0.1.0';
 const PASSWORD_RESET_TTL_MINUTES = 30;
-const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_ATTEMPT_LIMIT = 8;
 const RESET_ATTEMPT_LIMIT = 5;
+const AI_REQUEST_LIMIT = 30;
+const DUMMY_PASSWORD_HASH = hashPassword('chronicle-timing-equalizer');
 
 export function createApp(options: AppOptions = {}) {
   const app = express();
-  const dbPath = options.dbPath ?? defaultDbPath();
+  const dbPath = options.dbPath ?? process.env.DB_PATH ?? defaultDbPath();
   const clientDistPath = path.join(process.cwd(), 'dist');
   const clientIndexPath = path.join(clientDistPath, 'index.html');
   const dbDir = path.dirname(dbPath);
+  const backupDir = options.backupDir ?? path.join(dbDir, 'backups');
   fs.mkdirSync(dbDir, { recursive: true });
+
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  db.pragma('busy_timeout = 5000');
 
-  const jwtSecret = options.jwtSecret ?? process.env.JWT_SECRET ?? 'dev-only-lifeline-secret-change-me';
+  const migration = runMigrations(db, { dbPath, backupDir, log: logInfo });
+  const schemaVersion = getSchemaVersion(db);
+
+  const envSecret = options.jwtSecret ?? process.env.JWT_SECRET;
+  const configuredAdminPassword = options.adminPassword ?? process.env.ADMIN_PASSWORD;
+  if (process.env.NODE_ENV === 'production' && activeUserCount(db) === 0 && !configuredAdminPassword) {
+    db.close();
+    throw new Error(
+      'ADMIN_PASSWORD muss beim ersten Start in Production gesetzt sein. Der bekannte Standard-Admin wird dort nicht verwendet.',
+    );
+  }
+  const jwtSecret = envSecret || readOrCreateJwtSecret(path.join(dbDir, '.jwt-secret'));
+  const usingGeneratedSecret = !envSecret;
   const secureCookies = options.secureCookies ?? process.env.NODE_ENV === 'production';
   const allowRegistration = options.allowRegistration ?? process.env.ALLOW_REGISTRATION !== 'false';
   const exposeResetToken = process.env.NODE_ENV !== 'production' || process.env.PASSWORD_RESET_DEBUG === 'true';
+  const corsOrigins = options.corsOrigins ?? parseList(process.env.CORS_ORIGINS);
+  const trustProxy = options.trustProxy ?? parseTrustProxy(process.env.TRUST_PROXY);
+  const logRequests = options.logRequests ?? process.env.LOG_REQUESTS === 'true';
+  const openRouterBaseUrl = (options.openRouterBaseUrl ?? process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const aiModelCache = createAiModelCache();
   const authLimiter = createRateLimiter();
+
+  app.disable('x-powered-by');
+  if (trustProxy !== undefined) app.set('trust proxy', trustProxy);
+  app.use(cors({
+    origin: corsOrigins.length ? corsOrigins : false,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'x-csrf-token'],
+    exposedHeaders: ['X-Request-Id'],
+  }));
+  app.use(express.json({ limit: '5mb' }));
+  app.use(securityHeaders(secureCookies));
+  app.use(requestContext);
+
+  if (logRequests) {
+    app.use((req, res, next) => {
+      const started = process.hrtime.bigint();
+      res.on('finish', () => {
+        logInfo('http.request', {
+          requestId: req.requestId,
+          method: req.method,
+          path: req.path,
+          status: res.statusCode,
+          durationMs: Number(process.hrtime.bigint() - started) / 1e6,
+          userId: req.auth?.id ?? null,
+        });
+      });
+      next();
+    });
+  }
 
   logInfo('startup.database_ready', {
     dbPath,
+    schemaVersion,
+    latestSchemaVersion,
+    migrationBackup: migration.backupPath,
     environment: process.env.NODE_ENV ?? 'development',
     allowRegistration,
+    jwtSecretSource: usingGeneratedSecret ? 'persisted-local-file' : 'environment',
     frontendBundled: fs.existsSync(clientIndexPath),
   });
 
-  ensureSchema(db);
   bootstrapAdmin(db, {
     email: options.adminEmail ?? process.env.ADMIN_EMAIL,
-    password: options.adminPassword ?? process.env.ADMIN_PASSWORD,
+    password: configuredAdminPassword,
     name: options.adminName ?? process.env.ADMIN_NAME,
     color: options.adminColor ?? process.env.ADMIN_COLOR,
   });
 
-  app.use(cors({ origin: true, credentials: true }));
-  app.use(express.json());
-  app.use(securityHeaders);
-
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true });
+    res.json({
+      ok: true,
+      status: 'ok',
+      version: APP_VERSION,
+      schemaVersion,
+      uptimeSeconds: Math.round(process.uptime()),
+    });
+  });
+
+  app.get('/api/health/ready', (_req, res) => {
+    try {
+      db.prepare('SELECT 1').get();
+      res.json({ ok: true, status: 'ready', schemaVersion });
+    } catch (error) {
+      logError('health.readiness_failed', { message: error instanceof Error ? error.message : String(error) });
+      res.status(503).json({ ok: false, status: 'unavailable' });
+    }
   });
 
   app.get('/api/auth/config', (_req, res) => {
-    res.json({ allowRegistration });
+    res.json({ allowRegistration, version: APP_VERSION });
   });
 
-  app.use((req, _res, next) => {
-    const token = readCookie(req.headers.cookie, AUTH_COOKIE);
-    if (!token) return next();
-    try {
-      const payload = verifyAccessToken(token, jwtSecret);
-      const user = getUserById(db, Number(payload.sub));
-      if (user) req.auth = user;
-    } catch {
-      req.auth = undefined;
-    }
-    next();
-  });
+  app.use(createAuthMiddleware(db, jwtSecret));
 
   app.post('/api/auth/register', authLimiter('register', LOGIN_ATTEMPT_LIMIT), (req, res) => {
     if (!allowRegistration) {
@@ -185,25 +224,33 @@ export function createApp(options: AppOptions = {}) {
     const payload = registerSchema.parse(req.body);
     ensureUniqueEmail(db, payload.email);
 
-    const role: Role = activeUserCount(db) === 0 ? 'admin' : 'user';
+    const role = activeUserCount(db) === 0 ? 'admin' : 'user';
     const created = createUser(db, { ...payload, role });
+    const session = getUserSession(db, created.id)!;
     logInfo('auth.register_success', requestMeta(req, { userId: created.id, email: created.email, role: created.role }));
-    attachAuthCookies(res, created, jwtSecret, secureCookies);
-    res.status(201).json({ user: created, csrfToken: readSetCookieValue(res, CSRF_COOKIE) });
+    const csrfToken = attachAuthCookies(res, { id: created.id, role: created.role, sessionVersion: session.sessionVersion }, jwtSecret, secureCookies);
+    res.status(201).json({ user: created, csrfToken });
   });
 
   app.post('/api/auth/login', authLimiter('login', LOGIN_ATTEMPT_LIMIT), (req, res) => {
     const payload = loginSchema.parse(req.body);
     const row = getUserRowByEmail(db, payload.email);
-    if (!row?.passwordHash || !verifyPassword(payload.password, row.passwordHash)) {
+    const hash = row?.passwordHash ?? DUMMY_PASSWORD_HASH;
+    const validPassword = verifyPassword(payload.password, hash) && Boolean(row?.passwordHash);
+    if (!row || !validPassword) {
       logWarn('auth.login_failed', requestMeta(req, { email: payload.email, reason: 'invalid_credentials' }));
       return res.status(401).json({ message: 'E-Mail oder Passwort falsch.' });
     }
 
     const user = sanitizeUser(row);
     logInfo('auth.login_success', requestMeta(req, { userId: user.id, email: user.email, role: user.role }));
-    attachAuthCookies(res, user, jwtSecret, secureCookies);
-    res.json({ user, csrfToken: readSetCookieValue(res, CSRF_COOKIE) });
+    const csrfToken = attachAuthCookies(
+      res,
+      { id: row.id, role: row.role, sessionVersion: Number(row.sessionVersion ?? 0) },
+      jwtSecret,
+      secureCookies,
+    );
+    res.json({ user, csrfToken });
   });
 
   app.post('/api/auth/logout', (req, res) => {
@@ -217,7 +264,7 @@ export function createApp(options: AppOptions = {}) {
     const row = getUserRowByEmail(db, payload.email);
 
     if (row?.passwordHash) {
-      deletePasswordResetTokensForUser(db, row.id);
+      db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?').run(row.id);
       const rawToken = createResetToken();
       const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000).toISOString();
       db.prepare(`
@@ -256,11 +303,14 @@ export function createApp(options: AppOptions = {}) {
 
     db.prepare(`
       UPDATE users
-      SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
+      SET password_hash = ?,
+          session_version = session_version + 1,
+          updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(hashPassword(payload.password), tokenRow.userId);
-    db.prepare(`UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ?`).run(tokenRow.id);
-    deletePasswordResetTokensForUser(db, tokenRow.userId, tokenRow.id);
+    db.prepare('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ?').run(tokenRow.id);
+    db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ? AND id != ?').run(tokenRow.userId, tokenRow.id);
+    db.prepare('DELETE FROM password_reset_tokens WHERE expires_at < ?').run(new Date().toISOString());
     logInfo('auth.password_reset_success', requestMeta(req, { userId: tokenRow.userId }));
     clearAuthCookies(res, secureCookies);
     return res.json({ ok: true, message: 'Passwort wurde zurückgesetzt. Bitte neu anmelden.' });
@@ -273,51 +323,170 @@ export function createApp(options: AppOptions = {}) {
   app.use('/api', requireCsrfForWrites);
 
   app.get('/api/events', requireAuth, (req, res) => {
-    const events = getEvents(db, req.auth!.id);
-    res.json({ events, summary: getSummary(events) });
+    const query = eventQuerySchema.parse(req.query);
+    const result = listEvents(db, req.auth!.id, query);
+    res.json({
+      ...result,
+      summary: getSummary(db, req.auth!.id, activeUserCount(db)),
+      facets: getFacets(db, req.auth!.id),
+    });
+  });
+
+  app.get('/api/events/trash', requireAuth, (req, res) => {
+    const query = eventQuerySchema.parse({
+      ...req.query,
+      trash: 'true',
+      sort: req.query.sort ?? 'deleted-desc',
+    });
+    const result = listEvents(db, req.auth!.id, query);
+    res.json({
+      ...result,
+      summary: getSummary(db, req.auth!.id, activeUserCount(db)),
+      facets: getFacets(db, req.auth!.id),
+    });
+  });
+
+  app.get('/api/events/:id', requireAuth, (req, res) => {
+    res.json(getEventById(db, parseId(req.params.id), req.auth!.id));
   });
 
   app.post('/api/events', requireAuth, (req, res) => {
-    const payload = eventSchema.parse(req.body);
-    const normalized = normalizeEvent({ ...payload, userId: req.auth!.id });
-    const result = db.prepare(`
-      INSERT INTO events (user_id, title, description, category, start_date, end_date, is_ongoing, sort_start, sort_end)
-      VALUES (@userId, @title, @description, @category, @startDate, @endDate, @isOngoing, @sortStart, @sortEnd)
-    `).run(normalized);
-
-    logInfo('events.created', requestMeta(req, { userId: req.auth!.id, eventId: Number(result.lastInsertRowid), title: payload.title }));
-    res.status(201).json(getEventById(db, Number(result.lastInsertRowid), req.auth!.id));
+    const payload = eventInputSchema.parse(req.body);
+    const event = createEvent(db, req.auth!.id, payload);
+    logInfo('events.created', requestMeta(req, { userId: req.auth!.id, eventId: event.id, title: event.title }));
+    res.status(201).json(event);
   });
 
   app.put('/api/events/:id', requireAuth, (req, res) => {
-    const payload = eventSchema.parse(req.body);
-    const eventId = Number(req.params.id);
-    ensureEventOwner(db, eventId, req.auth!.id);
-    const normalized = normalizeEvent({ ...payload, userId: req.auth!.id });
-    db.prepare(`
-      UPDATE events
-      SET title = @title,
-          description = @description,
-          category = @category,
-          start_date = @startDate,
-          end_date = @endDate,
-          is_ongoing = @isOngoing,
-          sort_start = @sortStart,
-          sort_end = @sortEnd,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = @id AND user_id = @userId
-    `).run({ ...normalized, id: eventId });
-
+    const eventId = parseId(req.params.id);
+    const payload = eventInputSchema.parse(req.body);
+    const event = updateEvent(db, eventId, req.auth!.id, payload);
     logInfo('events.updated', requestMeta(req, { userId: req.auth!.id, eventId, title: payload.title }));
-    res.json(getEventById(db, eventId, req.auth!.id));
+    res.json(event);
   });
 
   app.delete('/api/events/:id', requireAuth, (req, res) => {
-    const eventId = Number(req.params.id);
-    ensureEventOwner(db, eventId, req.auth!.id);
-    db.prepare('DELETE FROM events WHERE id = ? AND user_id = ?').run(eventId, req.auth!.id);
-    logInfo('events.deleted', requestMeta(req, { userId: req.auth!.id, eventId }));
-    res.json({ ok: true });
+    const eventId = parseId(req.params.id);
+    const permanent = req.query.permanent === 'true' || req.query.permanent === '1';
+    if (permanent) {
+      purgeEvent(db, eventId, req.auth!.id);
+      logInfo('events.purged', requestMeta(req, { userId: req.auth!.id, eventId }));
+      return res.json({ ok: true, mode: 'permanent' });
+    }
+
+    const result = softDeleteEvent(db, eventId, req.auth!.id);
+    logInfo('events.trashed', requestMeta(req, { userId: req.auth!.id, eventId }));
+    res.json({ ok: true, mode: 'trash', deletedAt: result.deletedAt });
+  });
+
+  app.post('/api/events/:id/restore', requireAuth, (req, res) => {
+    const eventId = parseId(req.params.id);
+    const event = restoreEvent(db, eventId, req.auth!.id);
+    logInfo('events.restored', requestMeta(req, { userId: req.auth!.id, eventId }));
+    res.json(event);
+  });
+
+  app.delete('/api/trash', requireAuth, (req, res) => {
+    const removed = emptyTrash(db, req.auth!.id);
+    logInfo('trash.emptied', requestMeta(req, { userId: req.auth!.id, removed }));
+    res.json({ ok: true, removed });
+  });
+
+  app.get('/api/insights', requireAuth, (req, res) => {
+    res.json(getInsights(db, req.auth!.id));
+  });
+
+  app.get('/api/ai/settings', requireAuth, (req, res) => {
+    res.json(getAiSettings(db, req.auth!.id, jwtSecret));
+  });
+
+  app.put('/api/ai/settings', requireAuth, (req, res) => {
+    const payload = aiSettingsSchema.parse(req.body);
+    if (!payload.apiKey && !payload.model) {
+      throw new HttpError(400, 'API-Key oder Modell fehlt.');
+    }
+    const settings = saveAiSettings(db, req.auth!.id, jwtSecret, payload);
+    logInfo('ai.settings_updated', requestMeta(req, {
+      userId: req.auth!.id,
+      model: settings.model,
+      configured: settings.configured,
+      keyChanged: Boolean(payload.apiKey),
+    }));
+    res.json(settings);
+  });
+
+  app.delete('/api/ai/settings', requireAuth, (req, res) => {
+    const result = deleteAiSettings(db, req.auth!.id);
+    logInfo('ai.settings_removed', requestMeta(req, { userId: req.auth!.id }));
+    res.json(result);
+  });
+
+  app.get('/api/ai/models', requireAuth, authLimiter('ai-models', AI_REQUEST_LIMIT), async (req, res) => {
+    const result = await aiModelCache.load(() => listAiModels({
+      db,
+      userId: req.auth!.id,
+      secret: jwtSecret,
+      baseUrl: openRouterBaseUrl,
+      fetchImpl,
+    }));
+    res.json(result);
+  });
+
+  app.post('/api/ai/draft', requireAuth, authLimiter('ai-draft', AI_REQUEST_LIMIT), async (req, res) => {
+    const payload = aiGenerateSchema.parse(req.body);
+    const categories = getFacets(db, req.auth!.id).categories.map((item) => item.name);
+    const result = await generateAiDraft({
+      db,
+      userId: req.auth!.id,
+      secret: jwtSecret,
+      baseUrl: openRouterBaseUrl,
+      fetchImpl,
+      prompt: payload.prompt,
+      categories,
+    });
+    logInfo('ai.draft_created', requestMeta(req, {
+      userId: req.auth!.id,
+      model: result.model,
+      title: result.draft.title,
+      startYear: result.draft.startDate.year,
+    }));
+    res.json(result);
+  });
+
+  app.post('/api/ai/revise', requireAuth, authLimiter('ai-revise', AI_REQUEST_LIMIT), async (req, res) => {
+    const payload = aiReviseSchema.parse(req.body);
+    const categories = getFacets(db, req.auth!.id).categories.map((item) => item.name);
+    const result = await reviseAiDraft({
+      db,
+      userId: req.auth!.id,
+      secret: jwtSecret,
+      baseUrl: openRouterBaseUrl,
+      fetchImpl,
+      draft: payload.draft,
+      instruction: payload.instruction,
+      categories,
+    });
+    logInfo('ai.draft_revised', requestMeta(req, {
+      userId: req.auth!.id,
+      model: result.model,
+      title: result.draft.title,
+    }));
+    res.json(result);
+  });
+
+  app.get('/api/export', requireAuth, (req, res) => {
+    const includeTrash = req.query.includeTrash !== 'false';
+    const data = exportUserData(db, req.auth!.id, includeTrash);
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Disposition', `attachment; filename="chronicle-export-${stamp}.json"`);
+    res.type('application/json').send(JSON.stringify(data, null, 2));
+  });
+
+  app.post('/api/import', requireAuth, (req, res) => {
+    const payload = importPayloadSchema.parse(req.body);
+    const result = importEvents(db, req.auth!.id, payload.events);
+    logInfo('data.imported', requestMeta(req, { userId: req.auth!.id, ...result }));
+    res.json({ ok: true, ...result });
   });
 
   app.get('/api/account', requireAuth, (req, res) => {
@@ -335,22 +504,29 @@ export function createApp(options: AppOptions = {}) {
       }
     }
 
-    db.prepare(`
-      UPDATE users
-      SET name = COALESCE(@name, name),
-          color = COALESCE(@color, color),
-          password_hash = COALESCE(@passwordHash, password_hash),
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = @id
-    `).run({
-      id: req.auth!.id,
-      name: payload.name ?? null,
-      color: payload.color ?? null,
+    const passwordChanged = Boolean(payload.newPassword);
+    updateUserDetails(db, req.auth!.id, {
+      name: payload.name,
+      color: payload.color,
       passwordHash: payload.newPassword ? hashPassword(payload.newPassword) : null,
+      bumpSession: passwordChanged,
     });
 
     const updated = getUserById(db, req.auth!.id);
-    res.json({ user: updated });
+    if (!updated) return res.status(404).json({ message: 'Benutzer nicht gefunden.' });
+
+    if (passwordChanged) {
+      const session = getUserSession(db, updated.id)!;
+      const csrfToken = attachAuthCookies(
+        res,
+        { id: updated.id, role: updated.role, sessionVersion: session.sessionVersion },
+        jwtSecret,
+        secureCookies,
+      );
+      return res.json({ user: updated, csrfToken });
+    }
+
+    return res.json({ user: updated });
   });
 
   app.delete('/api/account', requireAuth, (req, res) => {
@@ -366,7 +542,7 @@ export function createApp(options: AppOptions = {}) {
       return res.status(400).json({ message: 'Der letzte Administrator kann nicht gelöscht werden.' });
     }
 
-    db.prepare('DELETE FROM users WHERE id = ?').run(req.auth!.id);
+    deleteUser(db, req.auth!.id);
     logInfo('account.deleted', requestMeta(req, { userId: req.auth!.id, email: row.email }));
     clearAuthCookies(res, secureCookies);
     res.json({ ok: true });
@@ -386,441 +562,115 @@ export function createApp(options: AppOptions = {}) {
 
   app.patch('/api/admin/users/:id', requireAdmin, (req, res) => {
     const payload = adminUpdateUserSchema.parse(req.body);
-    const userId = Number(req.params.id);
+    const userId = parseId(req.params.id);
     const row = getUserRowById(db, userId);
     if (!row) return res.status(404).json({ message: 'Benutzer nicht gefunden.' });
     if (row.role === 'admin' && payload.role === 'user' && adminCount(db) <= 1) {
       return res.status(400).json({ message: 'Der letzte Administrator darf nicht herabgestuft werden.' });
     }
 
-    db.prepare(`
-      UPDATE users
-      SET name = COALESCE(@name, name),
-          color = COALESCE(@color, color),
-          role = COALESCE(@role, role),
-          password_hash = COALESCE(@passwordHash, password_hash),
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = @id
-    `).run({
-      id: userId,
-      name: payload.name ?? null,
-      color: payload.color ?? null,
-      role: payload.role ?? null,
+    const roleChanged = Boolean(payload.role && payload.role !== row.role);
+    const passwordChanged = Boolean(payload.password);
+    updateUserDetails(db, userId, {
+      name: payload.name,
+      color: payload.color,
+      role: payload.role,
       passwordHash: payload.password ? hashPassword(payload.password) : null,
+      bumpSession: roleChanged || passwordChanged,
     });
 
-    logInfo('admin.user_updated', requestMeta(req, { actorUserId: req.auth!.id, userId }));
-    res.json({ user: getUserById(db, userId) });
+    logInfo('admin.user_updated', requestMeta(req, { actorUserId: req.auth!.id, userId, roleChanged, passwordChanged }));
+    const updated = getUserById(db, userId);
+
+    if (userId === req.auth!.id && (roleChanged || passwordChanged)) {
+      const session = getUserSession(db, userId)!;
+      const csrfToken = attachAuthCookies(
+        res,
+        { id: userId, role: session.user.role, sessionVersion: session.sessionVersion },
+        jwtSecret,
+        secureCookies,
+      );
+      return res.json({ user: updated, csrfToken });
+    }
+
+    return res.json({ user: updated });
+  });
+
+  app.get('/api/admin/backup', requireAdmin, (_req, res) => {
+    const target = backupDatabase(db, dbPath, backupDir, 'admin-download');
+    if (!target) throw new HttpError(400, 'Backup ist für diese Datenbank nicht verfügbar.');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    logInfo('admin.backup_downloaded', requestMeta(_req, { target }));
+    res.download(target, `chronicle-backup-${stamp}.sqlite`);
+  });
+
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ message: 'API-Endpunkt nicht gefunden.' });
   });
 
   if (fs.existsSync(clientIndexPath)) {
-    app.use(express.static(clientDistPath, { index: false }));
+    app.use(express.static(clientDistPath, {
+      index: false,
+      setHeaders: (res, filePath) => {
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    }));
     app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
       res.sendFile(clientIndexPath);
     });
   }
 
-  app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    if (error instanceof z.ZodError) {
-      logWarn('request.validation_failed', requestMeta(_req, { message: error.issues[0]?.message ?? 'Ungültige Eingabe.' }));
-      return res.status(400).json({ message: error.issues[0]?.message ?? 'Ungültige Eingabe.' });
-    }
-
-    if (error instanceof AuthError) {
-      logWarn('request.auth_failed', requestMeta(_req, { status: error.status, message: error.message }));
-      return res.status(error.status).json({ message: error.message });
-    }
-
-    if (error instanceof Error) {
-      logError('request.failed', requestMeta(_req, { message: error.message, stack: error.stack }));
-      return res.status(400).json({ message: error.message });
-    }
-
-    logError('request.failed_unknown', requestMeta(_req));
-    return res.status(500).json({ message: 'Unbekannter Serverfehler.' });
+  app.use((_req, res) => {
+    res.status(404).json({ message: 'Nicht gefunden.' });
   });
 
-  return { app, db };
+  app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (res.headersSent) return;
+
+    if (error instanceof z.ZodError) {
+      logWarn('request.validation_failed', requestMeta(req, { message: error.issues[0]?.message ?? 'Ungültige Eingabe.' }));
+      return res.status(400).json({
+        message: error.issues[0]?.message ?? 'Ungültige Eingabe.',
+        issues: error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
+      });
+    }
+
+    if (error instanceof HttpError) {
+      logWarn('request.failed', requestMeta(req, { status: error.status, message: error.message }));
+      return res.status(error.status).json({ message: error.message, requestId: req.requestId });
+    }
+
+    if (error instanceof SyntaxError && 'body' in error) {
+      return res.status(400).json({ message: 'Ungültiges JSON.', requestId: req.requestId });
+    }
+
+    const message = error instanceof Error ? error.message : 'Unbekannter Fehler.';
+    logError('request.crashed', requestMeta(req, { message, stack: error instanceof Error ? error.stack : undefined }));
+    return res.status(500).json({
+      message: 'Interner Serverfehler. Bitte später erneut probieren.',
+      requestId: req.requestId,
+    });
+  });
+
+  return { app, db, schemaVersion };
 }
 
 function defaultDbPath() {
   return path.join(process.cwd(), 'data', 'lifeline.sqlite');
 }
 
-function requestMeta(req: express.Request, extra: Record<string, unknown> = {}) {
-  return {
-    method: req.method,
-    path: req.path,
-    ip: req.ip,
-    userId: req.auth?.id ?? null,
-    ...extra,
-  };
+function parseId(value: string | string[]) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id < 1) throw new HttpError(400, 'Ungültige ID.');
+  return id;
 }
 
-function logInfo(event: string, meta: Record<string, unknown> = {}) {
-  console.info(`[lifeline] ${event}`, meta);
-}
-
-function logWarn(event: string, meta: Record<string, unknown> = {}) {
-  console.warn(`[lifeline] ${event}`, meta);
-}
-
-function logError(event: string, meta: Record<string, unknown> = {}) {
-  console.error(`[lifeline] ${event}`, meta);
-}
-
-function ensureSchema(db: Database.Database) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      color TEXT NOT NULL,
-      email TEXT,
-      password_hash TEXT,
-      role TEXT NOT NULL DEFAULT 'user',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      title TEXT NOT NULL,
-      description TEXT NOT NULL DEFAULT '',
-      category TEXT NOT NULL,
-      start_date TEXT NOT NULL,
-      end_date TEXT,
-      is_ongoing INTEGER NOT NULL DEFAULT 0,
-      sort_start TEXT NOT NULL,
-      sort_end TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS password_reset_tokens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      token_hash TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      used_at TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-
-  addColumnIfMissing(db, 'users', 'email', 'TEXT');
-  addColumnIfMissing(db, 'users', 'password_hash', 'TEXT');
-  addColumnIfMissing(db, 'users', 'role', "TEXT NOT NULL DEFAULT 'user'");
-  addColumnIfMissing(db, 'users', 'updated_at', 'TEXT');
-  db.prepare("UPDATE users SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)").run();
-  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email IS NOT NULL");
-  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_password_reset_token_hash ON password_reset_tokens(token_hash)');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_password_reset_user_id ON password_reset_tokens(user_id)');
-}
-
-function addColumnIfMissing(db: Database.Database, table: string, column: string, definition: string) {
-  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-  if (!columns.some((entry) => entry.name === column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-  }
-}
-
-function bootstrapAdmin(db: Database.Database, config: { email?: string; password?: string; name?: string; color?: string }) {
-  if (activeUserCount(db) > 0) return;
-
-  const email = config.email ?? 'admin@lifeline.local';
-  const password = config.password ?? 'ChangeMe123!';
-  const name = config.name ?? 'Administrator';
-  const color = config.color ?? '#7c3aed';
-  const existing = db.prepare('SELECT id, name, color FROM users ORDER BY id ASC LIMIT 1').get() as { id: number; name: string; color: string } | undefined;
-
-  if (existing) {
-    db.prepare(`
-      UPDATE users
-      SET name = ?, color = ?, email = ?, password_hash = ?, role = 'admin', updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(existing.name || name, existing.color || color, email, hashPassword(password), existing.id);
-    return;
-  }
-
-  db.prepare(`
-    INSERT INTO users (name, color, email, password_hash, role)
-    VALUES (?, ?, ?, ?, 'admin')
-  `).run(name, color, email, hashPassword(password));
-}
-
-function normalizeEvent(payload: z.infer<typeof eventSchema> & { userId: number }) {
-  const startDate = cleanDate(payload.startDate);
-  const endDate = payload.endDate ? cleanDate(payload.endDate) : null;
-
-  if (endDate && sortKey(startDate, false) > sortKey(endDate, true)) {
-    throw new Error('Das Ende darf nicht vor dem Anfang liegen.');
-  }
-
-  return {
-    userId: payload.userId,
-    title: payload.title,
-    description: payload.description,
-    category: normalizeCategories(payload.category),
-    startDate: JSON.stringify(startDate),
-    endDate: endDate ? JSON.stringify(endDate) : null,
-    isOngoing: payload.isOngoing ? 1 : 0,
-    sortStart: sortKey(startDate, false),
-    sortEnd: sortKey(endDate ?? startDate, true),
-  };
-}
-
-function normalizeCategories(value: string) {
-  const seen = new Set<string>();
-  const unique = value
+function parseList(value: string | undefined) {
+  return (value ?? '')
     .split(',')
     .map((entry) => entry.trim())
-    .filter((entry) => {
-      if (!entry) return false;
-      const key = entry.toLocaleLowerCase('de');
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  return unique.join(', ') || 'Alltag';
-}
-
-function cleanDate(date: TimelineDate): TimelineDate {
-  return {
-    precision: date.precision,
-    year: date.year,
-    month: date.precision === 'year' ? null : date.month ?? null,
-    day: date.precision === 'day' ? date.day ?? null : null,
-  };
-}
-
-function sortKey(date: TimelineDate, end: boolean) {
-  const month = date.precision === 'year' ? (end ? 12 : 1) : date.month ?? (end ? 12 : 1);
-  const day = date.precision === 'day'
-    ? date.day ?? (end ? daysInMonth(date.year, month) : 1)
-    : end
-      ? daysInMonth(date.year, month)
-      : 1;
-  return `${String(date.year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
-function daysInMonth(year: number, month: number) {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
-
-function getEvents(db: Database.Database, userId: number) {
-  const statement = db.prepare(`
-    SELECT id, user_id as userId, title, description, category, start_date as startDate, end_date as endDate, is_ongoing as isOngoing, created_at as createdAt, updated_at as updatedAt, sort_start as sortStart, sort_end as sortEnd
-    FROM events
-    WHERE user_id = ?
-    ORDER BY sort_start ASC, sort_end ASC, id ASC
-  `);
-  return (statement.all(userId) as Record<string, unknown>[]).map(deserializeEvent);
-}
-
-function getEventById(db: Database.Database, id: number, userId: number) {
-  const row = db.prepare(`
-    SELECT id, user_id as userId, title, description, category, start_date as startDate, end_date as endDate, is_ongoing as isOngoing, created_at as createdAt, updated_at as updatedAt, sort_start as sortStart, sort_end as sortEnd
-    FROM events
-    WHERE id = ? AND user_id = ?
-  `).get(id, userId) as Record<string, unknown> | undefined;
-  if (!row) throw new AuthError(404, 'Ereignis nicht gefunden.');
-  return deserializeEvent(row);
-}
-
-function deserializeEvent(row: Record<string, unknown>) {
-  return {
-    ...row,
-    startDate: JSON.parse(String(row.startDate)),
-    endDate: row.endDate ? JSON.parse(String(row.endDate)) : null,
-    isOngoing: Boolean(row.isOngoing),
-  };
-}
-
-function getSummary(events: ReturnType<typeof getEvents>) {
-  if (!events.length) {
-    return {
-      totalUsers: 1,
-      totalEvents: 0,
-      rangeLabel: 'Noch leer',
-      ongoingEvents: 0,
-    };
-  }
-  const first = events[0];
-  const last = events[events.length - 1];
-  return {
-    totalUsers: 1,
-    totalEvents: events.length,
-    rangeLabel: `${first.startDate.year} – ${(last.endDate ?? last.startDate).year}`,
-    ongoingEvents: events.filter((event) => event.isOngoing).length,
-  };
-}
-
-function sanitizeUser(row: { id: number; name: string; color: string; email: string; role: Role; createdAt: string }) {
-  return {
-    id: row.id,
-    name: row.name,
-    color: row.color,
-    email: row.email,
-    role: row.role,
-    createdAt: row.createdAt,
-  } satisfies SanitizedUser;
-}
-
-function getUserRowByEmail(db: Database.Database, email: string) {
-  return db.prepare(`SELECT id, name, color, email, password_hash as passwordHash, role, created_at as createdAt FROM users WHERE lower(email) = lower(?)`).get(email) as
-    | ({ id: number; name: string; color: string; email: string; passwordHash: string | null; role: Role; createdAt: string })
-    | undefined;
-}
-
-function getUserRowById(db: Database.Database, id: number) {
-  return db.prepare(`SELECT id, name, color, email, password_hash as passwordHash, role, created_at as createdAt FROM users WHERE id = ?`).get(id) as
-    | ({ id: number; name: string; color: string; email: string; passwordHash: string | null; role: Role; createdAt: string })
-    | undefined;
-}
-
-function getUserById(db: Database.Database, id: number) {
-  const row = db.prepare(`SELECT id, name, color, email, role, created_at as createdAt FROM users WHERE id = ?`).get(id) as
-    | ({ id: number; name: string; color: string; email: string; role: Role; createdAt: string })
-    | undefined;
-  return row ? sanitizeUser(row) : null;
-}
-
-function createUser(db: Database.Database, payload: z.infer<typeof createUserSchema>) {
-  const result = db.prepare(`
-    INSERT INTO users (name, color, email, password_hash, role)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(payload.name, payload.color, payload.email.toLowerCase(), hashPassword(payload.password), payload.role);
-  return getUserById(db, Number(result.lastInsertRowid))!;
-}
-
-function listUsers(db: Database.Database) {
-  return db.prepare(`SELECT id, name, color, email, role, created_at as createdAt FROM users ORDER BY created_at ASC, id ASC`).all().map((row) => sanitizeUser(row as SanitizedUser));
-}
-
-function deletePasswordResetTokensForUser(db: Database.Database, userId: number, keepTokenId?: number) {
-  if (keepTokenId) {
-    db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ? AND id != ?').run(userId, keepTokenId);
-    return;
-  }
-  db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?').run(userId);
-}
-
-function activeUserCount(db: Database.Database) {
-  return Number((db.prepare('SELECT COUNT(*) as count FROM users WHERE email IS NOT NULL').get() as { count: number }).count);
-}
-
-function adminCount(db: Database.Database) {
-  return Number((db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'admin'").get() as { count: number }).count);
-}
-
-function ensureUniqueEmail(db: Database.Database, email: string) {
-  const existing = getUserRowByEmail(db, email);
-  if (existing) throw new AuthError(409, 'E-Mail ist bereits vergeben.');
-}
-
-function ensureEventOwner(db: Database.Database, eventId: number, userId: number) {
-  const row = db.prepare('SELECT id FROM events WHERE id = ? AND user_id = ?').get(eventId, userId);
-  if (!row) throw new AuthError(404, 'Ereignis nicht gefunden.');
-}
-
-function readCookie(cookieHeader: string | undefined, key: string) {
-  if (!cookieHeader) return null;
-  return cookieHeader
-    .split(';')
-    .map((entry) => entry.trim())
-    .find((entry) => entry.startsWith(`${key}=`))
-    ?.slice(key.length + 1) ?? null;
-}
-
-function attachAuthCookies(res: express.Response, user: SanitizedUser, jwtSecret: string, secureCookies: boolean) {
-  const token = signAccessToken({ sub: String(user.id), role: user.role, type: 'access' }, jwtSecret);
-  const csrfToken = createCsrfToken();
-  const ttl = tokenTtlSeconds();
-  res.setHeader('Set-Cookie', [
-    serializeCookie(AUTH_COOKIE, token, { httpOnly: true, maxAge: ttl, sameSite: 'Lax', secure: secureCookies }),
-    serializeCookie(CSRF_COOKIE, csrfToken, { httpOnly: false, maxAge: ttl, sameSite: 'Lax', secure: secureCookies }),
-  ]);
-}
-
-function securityHeaders(_req: express.Request, res: express.Response, next: express.NextFunction) {
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  next();
-}
-
-function createRateLimiter() {
-  const attempts = new Map<string, { count: number; resetAt: number }>();
-
-  return (scope: string, limit: number) => (req: express.Request, _res: express.Response, next: express.NextFunction) => {
-    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-    const key = [scope, req.ip, email].filter(Boolean).join(':');
-    const now = Date.now();
-    const current = attempts.get(key);
-
-    if (!current || current.resetAt <= now) {
-      attempts.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-      return next();
-    }
-
-    if (current.count >= limit) {
-      return next(new AuthError(429, 'Zu viele Versuche. Bitte später erneut probieren.'));
-    }
-
-    current.count += 1;
-    attempts.set(key, current);
-    return next();
-  };
-}
-
-function clearAuthCookies(res: express.Response, secureCookies: boolean) {
-  res.setHeader('Set-Cookie', [
-    serializeCookie(AUTH_COOKIE, '', { httpOnly: true, maxAge: 0, sameSite: 'Lax', secure: secureCookies }),
-    serializeCookie(CSRF_COOKIE, '', { httpOnly: false, maxAge: 0, sameSite: 'Lax', secure: secureCookies }),
-  ]);
-}
-
-function serializeCookie(name: string, value: string, options: { httpOnly: boolean; maxAge: number; sameSite: 'Lax'; secure: boolean }) {
-  const parts = [`${name}=${value}`, 'Path=/', `Max-Age=${options.maxAge}`, `SameSite=${options.sameSite}`];
-  if (options.httpOnly) parts.push('HttpOnly');
-  if (options.secure) parts.push('Secure');
-  return parts.join('; ');
-}
-
-function readSetCookieValue(res: express.Response, cookieName: string) {
-  const header = res.getHeader('Set-Cookie');
-  const cookies = Array.isArray(header) ? header : typeof header === 'string' ? [header] : [];
-  const found = cookies.find((entry) => entry.startsWith(`${cookieName}=`));
-  return found?.split(';')[0]?.split('=')[1] ?? '';
-}
-
-function requireAuth(req: express.Request, _res: express.Response, next: express.NextFunction) {
-  if (!req.auth) return next(new AuthError(401, 'Nicht angemeldet.'));
-  return next();
-}
-
-function requireAdmin(req: express.Request, _res: express.Response, next: express.NextFunction) {
-  if (!req.auth) return next(new AuthError(401, 'Nicht angemeldet.'));
-  if (req.auth.role !== 'admin') return next(new AuthError(403, 'Administratorrechte erforderlich.'));
-  return next();
-}
-
-function requireCsrfForWrites(req: express.Request, _res: express.Response, next: express.NextFunction) {
-  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
-  if (!req.path.startsWith('/auth/') && !req.auth) return next(new AuthError(401, 'Nicht angemeldet.'));
-  if (req.path === '/auth/login' || req.path === '/auth/register' || req.path === '/auth/logout') return next();
-
-  const csrfCookie = readCookie(req.headers.cookie, CSRF_COOKIE);
-  const csrfHeader = req.header('x-csrf-token');
-  if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
-    return next(new AuthError(403, 'CSRF-Token fehlt oder ist ungültig.'));
-  }
-  return next();
-}
-
-class AuthError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-  }
+    .filter(Boolean);
 }

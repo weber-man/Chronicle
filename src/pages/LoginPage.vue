@@ -6,12 +6,12 @@
       <p class="mt-2 text-sm text-stone-500">{{ subline }}</p>
     </div>
 
-    <SegmentedTabs class="mb-4" :items="tabItems" :model-value="activeTab" @update:model-value="switchMode" />
+    <SegmentedTabs class="mb-4" :items="tabItems" :model-value="activeTab" @update:model-value="switchMode($event as Mode)" />
 
     <form class="grid gap-4" @submit.prevent="submit">
       <label v-if="mode === 'register'" class="grid gap-2">
         <span class="text-sm text-stone-600">Name</span>
-        <input v-model="form.name" class="paper-input rounded-2xl px-4 py-3" placeholder="Manuel" />
+        <input v-model="form.name" class="paper-input rounded-2xl px-4 py-3" placeholder="Manuel" maxlength="60" autocomplete="name" required />
       </label>
 
       <label v-if="mode === 'register'" class="grid gap-2">
@@ -21,39 +21,47 @@
 
       <label v-if="mode !== 'reset-confirm'" class="grid gap-2">
         <span class="text-sm text-stone-600">E-Mail</span>
-        <input v-model="form.email" type="email" class="paper-input rounded-2xl px-4 py-3" placeholder="du@example.com" />
+        <input v-model="form.email" type="email" class="paper-input rounded-2xl px-4 py-3" placeholder="du@example.com" autocomplete="email" required />
       </label>
 
       <label v-if="mode === 'reset-confirm'" class="grid gap-2">
         <span class="text-sm text-stone-600">Reset-Token</span>
-        <input v-model="form.resetToken" class="paper-input rounded-2xl px-4 py-3" placeholder="Token aus Mail oder Dev-Ausgabe" />
+        <input v-model="form.resetToken" class="paper-input rounded-2xl px-4 py-3" placeholder="Token aus Mail oder Dev-Ausgabe" autocomplete="off" required />
       </label>
 
       <label v-if="mode !== 'reset-request'" class="grid gap-2">
         <span class="text-sm text-stone-600">Passwort</span>
-        <input v-model="form.password" type="password" class="paper-input rounded-2xl px-4 py-3" :placeholder="passwordPlaceholder" />
+        <input
+          v-model="form.password"
+          type="password"
+          class="paper-input rounded-2xl px-4 py-3"
+          :placeholder="passwordPlaceholder"
+          :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+          :minlength="mode === 'login' ? 8 : 12"
+          required
+        />
       </label>
 
-      <label v-if="mode === 'reset-confirm'" class="grid gap-2">
+      <label v-if="mode === 'register' || mode === 'reset-confirm'" class="grid gap-2">
         <span class="text-sm text-stone-600">Passwort wiederholen</span>
-        <input v-model="form.passwordConfirm" type="password" class="paper-input rounded-2xl px-4 py-3" placeholder="Neues Passwort wiederholen" />
+        <input v-model="form.passwordConfirm" type="password" class="paper-input rounded-2xl px-4 py-3" placeholder="Neues Passwort wiederholen" autocomplete="new-password" required />
       </label>
 
-      <p v-if="message" class="rounded-2xl border border-emerald-900/15 bg-emerald-100/70 px-4 py-3 text-sm text-emerald-950">{{ message }}</p>
-      <p v-if="debugResetToken" class="rounded-2xl border border-amber-900/15 bg-amber-100/70 px-4 py-3 text-xs text-amber-950 break-all">
+      <p v-if="message" class="rounded-2xl border border-emerald-900/15 bg-emerald-100/70 px-4 py-3 text-sm text-emerald-950" role="status" aria-live="polite">{{ message }}</p>
+      <p v-if="debugResetToken" class="break-all rounded-2xl border border-amber-900/15 bg-amber-100/70 px-4 py-3 text-xs text-amber-950">
         Dev-Reset-Token: <strong>{{ debugResetToken }}</strong>
       </p>
-      <p v-if="error" class="rounded-2xl border border-rose-900/15 bg-rose-100/70 px-4 py-3 text-sm text-rose-950">{{ error }}</p>
+      <p v-if="error" class="rounded-2xl border border-rose-900/15 bg-rose-100/70 px-4 py-3 text-sm text-rose-950" role="alert" aria-live="assertive">{{ error }}</p>
 
-      <button class="ink-button rounded-2xl px-5 py-3 font-medium" :disabled="submitting" type="submit">
+      <button class="ink-button rounded-2xl px-5 py-3 font-medium disabled:opacity-60" :disabled="submitting" type="submit">
         {{ submitting ? 'Bitte warten …' : submitLabel }}
       </button>
     </form>
 
     <div class="mt-4 flex justify-between text-xs text-stone-500">
-      <button v-if="mode === 'login'" class="hover:text-stone-800" @click="switchMode('reset-request')">Passwort vergessen?</button>
-      <button v-else-if="mode === 'reset-request'" class="hover:text-stone-800" @click="switchMode('reset-confirm')">Ich habe schon einen Token</button>
-      <button v-else-if="mode === 'reset-confirm'" class="hover:text-stone-800" @click="switchMode('login')">Zurück zum Login</button>
+      <button v-if="mode === 'login'" class="hover:text-stone-800" type="button" @click="switchMode('reset-request')">Passwort vergessen?</button>
+      <button v-else-if="mode === 'reset-request'" class="hover:text-stone-800" type="button" @click="switchMode('reset-confirm')">Ich habe schon einen Token</button>
+      <button v-else-if="mode === 'reset-confirm'" class="hover:text-stone-800" type="button" @click="switchMode('login')">Zurück zum Login</button>
       <span v-else></span>
     </div>
   </section>
@@ -111,6 +119,8 @@ const subline = computed(() => {
       return 'Wir starten einen sicheren Reset und zeigen lokal auf Wunsch den Token an.';
     case 'reset-confirm':
       return 'Token einfügen und ein neues starkes Passwort setzen.';
+    case 'register':
+      return 'Sicherer Zugriff auf deine persönliche Timeline.';
     default:
       return 'Sicherer Zugriff auf deine persönliche Timeline.';
   }
@@ -156,6 +166,15 @@ function switchMode(nextMode: Mode) {
 
 async function submit() {
   clearFeedback();
+  if ((mode.value === 'register' || mode.value === 'reset-confirm') && form.password !== form.passwordConfirm) {
+    error.value = 'Die neuen Passwörter stimmen nicht überein.';
+    return;
+  }
+  if (mode.value === 'register' && form.password.length < 12) {
+    error.value = 'Das Passwort braucht mindestens 12 Zeichen.';
+    return;
+  }
+
   submitting.value = true;
   try {
     if (mode.value === 'login') {

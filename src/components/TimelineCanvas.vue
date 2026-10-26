@@ -148,7 +148,7 @@ const markers = computed(() => {
   return items;
 });
 const yearStart = computed(() => markers.value[0]?.year ?? new Date(bounds.value.min * 86400000).getUTCFullYear());
-const yearEnd = computed(() => markers.value.at(-1)?.year ?? new Date(bounds.value.max * 86400000).getUTCFullYear());
+const yearEnd = computed(() => markers.value[markers.value.length - 1]?.year ?? new Date(bounds.value.max * 86400000).getUTCFullYear());
 
 const positionedEvents = computed(() => {
   return filteredEvents.value.map((event) => {

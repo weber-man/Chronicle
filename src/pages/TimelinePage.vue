@@ -1,6 +1,9 @@
 <template>
   <div class="space-y-6">
-    <TimelineCanvas :events="store.events" :users="store.users" />
+    <div v-if="store.isLoading && !store.events.length" class="paper-panel panel-reveal rounded-[2rem] p-8 text-center text-stone-500">
+      Timeline wird geladen …
+    </div>
+    <TimelineCanvas v-else :events="store.events" :users="store.users" />
   </div>
 </template>
 
@@ -8,10 +11,16 @@
 import { onMounted } from 'vue';
 import TimelineCanvas from '../components/TimelineCanvas.vue';
 import { useLifelineStore } from '../stores/lifeline';
+import { useToastStore } from '../stores/toast';
 
 const store = useLifelineStore();
+const toast = useToastStore();
 
 onMounted(async () => {
-  if (!store.users.length) await store.bootstrap();
+  try {
+    await store.loadAllEvents();
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Timeline konnte nicht geladen werden.');
+  }
 });
 </script>
