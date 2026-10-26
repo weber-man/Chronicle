@@ -199,7 +199,7 @@ const resultLabel = computed(() => {
   const total = props.models.length;
   const shown = filteredOptions.value.length;
   if (shown === total) return t('modelPicker.countModels', { count: total });
-  return t('modelPicker.shownOf', { shown, total });
+  return t('modelPicker.shownOf', { shown, total, count: total });
 });
 
 watch(query, () => {

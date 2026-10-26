@@ -335,7 +335,7 @@ export const useLifelineStore = defineStore('lifeline', () => {
     if (result.imported === 0) {
       message = t('toast.importNoNew', { skipped: result.skipped });
     } else {
-      message = t('toast.importSome', { imported: result.imported });
+      message = t('toast.importSome', { imported: result.imported, count: result.imported });
       if (result.skipped) message += t('toast.importSkipSuffix', { skipped: result.skipped });
     }
     toast.success(message);
