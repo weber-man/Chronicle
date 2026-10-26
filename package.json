@@ -18,7 +18,7 @@
     "coverage": "c8 --reporter=text --reporter=lcov --check-coverage --lines 70 --functions 70 --branches 70 --include=server/**/*.ts tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
-    "@vueuse/core": "^13.3.0",
+    "@vueuse/core": "^15.0.0",
     "better-sqlite3": "^12.2.0",
     "cors": "^2.8.5",
     "express": "^5.1.0",
